@@ -14,10 +14,7 @@
         --white: #ffffff;
     }
 
-    html, body {
-        margin: 0;
-        padding: 0;
-    }
+    html, body { margin: 0; padding: 0; }
 
     body {
         font-family: Arial, Helvetica, sans-serif;
@@ -250,6 +247,70 @@
         font-family: 'Arial Black', Arial, sans-serif;
     }
 
+    /* ─── Список сообществ ─── */
+    .communities-list {
+        margin: 12px 0;
+    }
+
+    .community-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        background: #f7f8fa;
+        border-radius: 10px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: background 0.15s;
+        border: 1px solid #e8eaed;
+    }
+
+    .community-item:active {
+        background: #e5d0ea;
+    }
+
+    .community-photo {
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+        flex-shrink: 0;
+        object-fit: cover;
+        background: #e5d0ea;
+    }
+
+    .community-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .community-name {
+        font-size: 14px;
+        font-weight: bold;
+        color: #1a1a1a;
+        margin-bottom: 3px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .community-id {
+        font-size: 12px;
+        color: #888;
+        font-family: Consolas, Monaco, monospace;
+    }
+
+    .no-communities {
+        text-align: center;
+        padding: 20px 0;
+    }
+
+    .no-communities p {
+        margin: 8px 0;
+        color: #666;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
     .footer {
         text-align: center;
         padding: 16px;
@@ -287,7 +348,7 @@
 
 <div class="phone">
 
-    <!-- ─── ШАПКА (общая для всех экранов) ─── -->
+    <!-- ─── ШАПКА ─── -->
     <div class="header">
         <img src="logo.png" alt="ArtWat" class="logo-img">
         <div class="subtitle">Активация умного автополива</div>
@@ -299,8 +360,8 @@
         <div id="screen-welcome">
             <div class="card">
                 <h2>Добро пожаловать!</h2>
-                <p>Это приложение автоматически создаст для вас сообщество ВКонтакте с ботом для управления устройством ArtWat.</p>
-                <p>Вам не нужно ничего настраивать вручную — просто нажмите кнопку ниже и разрешите доступ.</p>
+                <p>Это приложение поможет привязать ваш умный автополив ArtWat к сообществу ВКонтакте.</p>
+                <p>Вам нужно выбрать сообщество, где вы администратор — в нём будет работать бот управления.</p>
                 <button class="btn-primary" style="margin-top: 16px;" onclick="startSetup()">НАЧАТЬ НАСТРОЙКУ</button>
             </div>
         </div>
@@ -316,11 +377,25 @@
             </div>
         </div>
 
-        <!-- ═══ ЭКРАН 3: УСПЕХ ═══ -->
+        <!-- ═══ ЭКРАН 3: ВЫБОР СООБЩЕСТВА ═══ -->
+        <div id="screen-communities" class="hidden">
+            <div class="card">
+                <div class="success-title" id="communities-title">ВЫБЕРИТЕ СООБЩЕСТВО</div>
+                <div class="success-sub" id="communities-sub">В котором вы администратор</div>
+
+                <div id="communities-list" class="communities-list">
+                    <!-- Заполняется динамически -->
+                </div>
+
+                <button class="btn-secondary" onclick="retry()" style="margin-top: 16px;">НАЗАД</button>
+            </div>
+        </div>
+
+        <!-- ═══ ЭКРАН 4: УСПЕХ ═══ -->
         <div id="screen-success" class="hidden">
             <div class="card">
                 <div class="success-title">ГОТОВО!</div>
-                <div class="success-sub">Ваш бот создан и готов к работе</div>
+                <div class="success-sub">Ваш бот привязан и готов к работе</div>
 
                 <div class="field-block">
                     <div class="field-label">Group ID</div>
@@ -348,7 +423,7 @@
             </div>
         </div>
 
-        <!-- ═══ ЭКРАН 4: ОШИБКА ═══ -->
+        <!-- ═══ ЭКРАН 5: ОШИБКА ═══ -->
         <div id="screen-error" class="hidden">
             <div class="card">
                 <div class="error-title">НЕ УДАЛОСЬ ЗАВЕРШИТЬ НАСТРОЙКУ</div>
@@ -360,7 +435,7 @@
             <div id="help-block" class="card hidden">
                 <h2>Возможные причины</h2>
                 <p><b>1.</b> Вы не дали разрешение на управление сообществами — попробуйте снова и нажмите «Разрешить».</p>
-                <p><b>2.</b> У вас уже достигнут лимит сообществ в VK — удалите неиспользуемые.</p>
+                <p><b>2.</b> У вас нет сообществ, где вы администратор — создайте сообщество в VK.</p>
                 <p><b>3.</b> Временная ошибка VK — подождите пару минут и повторите.</p>
                 <p><b>4.</b> Проблема с интернетом — проверьте подключение.</p>
             </div>
@@ -378,4 +453,5 @@
 <script src="script.js"></script>
 
 </body>
+</html>
 </html>
