@@ -1,20 +1,19 @@
 // ═══════════════════════════════════════════════════════════
-//  ArtWat Setup — VK Mini App
-//  Автоматическое создание сообщества и получение токена
+//  ArtWat Setup — VK Mini App (Путь B: выбор сообщества)
 // ═══════════════════════════════════════════════════════════
 
 // ─── КОНФИГУРАЦИЯ ───────────────────────────────────────────
 const APP_ID = 54818456;
 
-const COMMUNITY_TITLE = 'ArtWat — мой автополив';
 const USER_SCOPE      = 'groups';
 const COMMUNITY_SCOPE = 'manage,messages,photos,docs';
 
 // ─── СОСТОЯНИЕ ──────────────────────────────────────────────
 const state = {
-    userToken:      null,
-    groupId:        null,
-    communityToken: null
+    userToken:       null,
+    communities:     [],      // массив { id, name, screen_name, photo }
+    selectedGroupId: null,
+    communityToken:  null
 };
 
 let vkReadyPromise = null;
@@ -24,7 +23,7 @@ let vkReadyPromise = null;
 const $ = (id) => document.getElementById(id);
 
 function showScreen(name) {
-    ['welcome', 'loading', 'success', 'error'].forEach(s => {
+    ['welcome', 'loading', 'communities', 'success', 'error'].forEach(s => {
         const el = $('screen-' + s);
         if (el) el.classList.toggle('hidden', s !== name);
     });
@@ -52,6 +51,14 @@ function toggleHelp() {
     $('help-block').classList.toggle('hidden');
 }
 
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 // ─── ОСНОВНАЯ ЛОГИКА ────────────────────────────────────────
 
 async function startSetup() {
@@ -66,17 +73,19 @@ async function startSetup() {
         state.userToken = await getUserToken();
         console.log('✅ Токен пользователя получен');
 
-        // Шаг 3: создаём сообщество
-        setProgress('Создание сообщества...', 3, 4);
-        state.groupId = await createCommunity(state.userToken);
-        console.log('✅ Сообщество создано, ID:', state.groupId);
+        // Шаг 3: получаем список сообществ пользователя
+        setProgress('Загрузка сообществ...', 3, 4);
+        state.communities = await getAdminCommunities(state.userToken);
+        console.log('✅ Загружено сообществ:', state.communities.length);
 
-        // Шаг 4: получаем токен сообщества
-        setProgress('Получение токена бота...', 4, 4);
-        state.communityToken = await getCommunityToken(state.groupId, state.userToken);
-        console.log('✅ Токен сообщества получен');
+        // Если сообществ нет — показываем экран с предложением создать
+        if (state.communities.length === 0) {
+            showNoCommunities();
+            return;
+        }
 
-        showResult();
+        // Показываем список для выбора
+        showCommunityList();
 
     } catch (err) {
         console.error('❌ Ошибка:', err);
@@ -105,42 +114,115 @@ async function getUserToken() {
     return data.access_token;
 }
 
-// ─── ШАГ 3: СОЗДАНИЕ СООБЩЕСТВА ────────────────────────────
+// ─── ШАГ 3: СПИСОК СООБЩЕСТВ ───────────────────────────────
 
-async function createCommunity(userToken) {
-    console.log('📤 Отправляю groups.create...');
+async function getAdminCommunities(userToken) {
+    console.log('📤 Запрашиваю groups.get...');
 
     const data = await vkBridge.send('VKWebAppCallAPIMethod', {
-        method: 'groups.create',
+        method: 'groups.get',
         params: {
-            title:        COMMUNITY_TITLE,
-            type:         'group',
+            filter:       'admin',
+            extended:     '1',
+            fields:       'photo_100,members_count',
             v:            '5.199',
             access_token: userToken
         }
     });
 
-    // 🔍 Сырой ответ от VK — ключевая информация для отладки
-    console.log('📥 Ответ groups.create:', JSON.stringify(data));
+    console.log('📥 Ответ groups.get:', JSON.stringify(data));
 
-    if (!data) {
-        throw new Error('VK вернул пустой ответ: ' + String(data));
+    if (data && data.error) {
+        throw new Error(translateVkError(data.error));
     }
 
-    if (data.error) {
-        throw new Error(
-            translateVkError(data.error) +
-            '\n\nСырой ответ VK: ' + JSON.stringify(data.error)
-        );
+    if (!data || !data.response) {
+        throw new Error('VK вернул неожиданный ответ: ' + JSON.stringify(data));
     }
 
-    if (data.response && data.response.id) {
-        return data.response.id;
-    }
+    // Формат ответа: { response: { count: N, items: [ {...}, {...} ] } }
+    const items = data.response.items || [];
 
-    throw new Error(
-        'Неожиданная структура ответа VK: ' + JSON.stringify(data)
-    );
+    return items.map(item => ({
+        id:          item.id,
+        name:        item.name,
+        screen_name: item.screen_name,
+        photo:       item.photo_100 || ''
+    }));
+}
+
+// ─── ПОКАЗ СПИСКА СООБЩЕСТВ ────────────────────────────────
+
+function showCommunityList() {
+    const listEl = $('communities-list');
+    if (!listEl) return;
+
+    $('communities-title').textContent = 'ВЫБЕРИТЕ СООБЩЕСТВО';
+    $('communities-sub').textContent   = 'В котором вы администратор';
+
+    listEl.innerHTML = '';
+
+    state.communities.forEach(c => {
+        const item = document.createElement('div');
+        item.className = 'community-item';
+        item.innerHTML = `
+            <img src="${escapeHtml(c.photo)}" alt="" class="community-photo">
+            <div class="community-info">
+                <div class="community-name">${escapeHtml(c.name)}</div>
+                <div class="community-id">ID: ${c.id}</div>
+            </div>
+        `;
+        item.onclick = () => selectCommunity(c.id);
+        listEl.appendChild(item);
+    });
+
+    showScreen('communities');
+}
+
+// ─── ПОКАЗ ЭКРАНА "НЕТ СООБЩЕСТВ" ──────────────────────────
+
+function showNoCommunities() {
+    $('communities-title').textContent = 'НЕТ СООБЩЕСТВ';
+    $('communities-sub').textContent   = 'Где вы администратор';
+
+    const listEl = $('communities-list');
+    listEl.innerHTML = `
+        <div class="no-communities">
+            <p>У вас нет сообществ, где вы администратор.</p>
+            <p>Создайте сообщество в VK и вернитесь сюда.</p>
+            <button class="btn-primary" onclick="openCreateGroup()">СОЗДАТЬ СООБЩЕСТВО В VK</button>
+        </div>
+    `;
+
+    showScreen('communities');
+}
+
+function openCreateGroup() {
+    const url = 'https://vk.com/groups?w=groups_create';
+    if (typeof vkBridge !== 'undefined') {
+        vkBridge.send('VKWebAppOpenLink', { url })
+            .catch(() => { window.open(url, '_blank'); });
+    } else {
+        window.open(url, '_blank');
+    }
+}
+
+// ─── ВЫБОР СООБЩЕСТВА ──────────────────────────────────────
+
+async function selectCommunity(groupId) {
+    state.selectedGroupId = groupId;
+
+    showScreen('loading');
+    setProgress('Получение токена бота...', 4, 4);
+
+    try {
+        state.communityToken = await getCommunityToken(groupId, state.userToken);
+        console.log('✅ Токен сообщества получен');
+        showResult();
+    } catch (err) {
+        console.error('❌ Ошибка:', err);
+        showError(err.message || JSON.stringify(err));
+    }
 }
 
 // ─── ШАГ 4: ТОКЕН СООБЩЕСТВА ───────────────────────────────
@@ -194,7 +276,7 @@ async function getCommunityToken(groupId, userToken) {
     }
 
     throw new Error(
-        'Сообщество создано (ID: ' + groupId + '), но автоматически получить токен не удалось.\n\n' +
+        'Не удалось автоматически получить токен сообщества.\n\n' +
         'Откройте сообщество в VK вручную: Управление → Работа с API → ' +
         'Создать ключ доступа. Выберите права: управление сообществом, сообщения, фотографии, документы.'
     );
@@ -203,7 +285,7 @@ async function getCommunityToken(groupId, userToken) {
 // ─── ПОКАЗ РЕЗУЛЬТАТА ──────────────────────────────────────
 
 function showResult() {
-    $('result-group-id').textContent = state.groupId;
+    $('result-group-id').textContent = state.selectedGroupId;
     $('result-token').textContent    = state.communityToken;
     showScreen('success');
 }
@@ -211,7 +293,7 @@ function showResult() {
 // ─── КОПИРОВАНИЕ ────────────────────────────────────────────
 
 function copyAll() {
-    const text = `Group ID: ${state.groupId}\nToken: ${state.communityToken}`;
+    const text = `Group ID: ${state.selectedGroupId}\nToken: ${state.communityToken}`;
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text)
@@ -241,9 +323,9 @@ function fallbackCopy(text) {
 // ─── ОТКРЫТИЕ СООБЩЕСТВА ────────────────────────────────────
 
 function openVkGroup() {
-    if (!state.groupId) return;
+    if (!state.selectedGroupId) return;
 
-    const url = 'https://vk.com/club' + state.groupId;
+    const url = 'https://vk.com/club' + state.selectedGroupId;
 
     if (typeof vkBridge !== 'undefined') {
         vkBridge.send('VKWebAppOpenLink', { url })
@@ -256,9 +338,10 @@ function openVkGroup() {
 // ─── ПОВТОР ─────────────────────────────────────────────────
 
 function retry() {
-    state.userToken      = null;
-    state.groupId        = null;
-    state.communityToken = null;
+    state.userToken       = null;
+    state.communities     = [];
+    state.selectedGroupId = null;
+    state.communityToken  = null;
 
     showScreen('welcome');
     $('help-block').classList.add('hidden');
@@ -276,7 +359,6 @@ function translateVkError(error) {
         14:  'Требуется ввод капчи. Откройте VK в браузере и попробуйте снова.',
         15:  'Доступ запрещён. Убедитесь, что вы разрешили управление сообществами.',
         100: 'Один из параметров указан неверно.',
-        121: 'Нет прав на создание сообщества.',
         200: 'Доступ к сообществу запрещён.',
         203: 'Вы не являетесь администратором этого сообщества.',
         260: 'Не удалось создать сообщество. Возможно, достигнут лимит.',
