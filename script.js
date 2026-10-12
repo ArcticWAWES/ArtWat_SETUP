@@ -23,6 +23,9 @@ const state = {
     communityToken: null
 };
 
+// Промис инициализации VK Bridge (запускается сразу при загрузке)
+let vkReadyPromise = null;
+
 // ─── UI-УТИЛИТЫ ─────────────────────────────────────────────
 
 const $ = (id) => document.getElementById(id);
@@ -63,9 +66,13 @@ async function startSetup() {
     setProgress('Инициализация...', 1, 4);
 
     try {
-        // Шаг 1: инициализация VK Bridge
-        await vkBridge.send('VKWebAppInit');
-        console.log('✅ VK Bridge инициализирован');
+        // Ждём завершения инициализации VK Bridge (запущена при загрузке страницы)
+        if (vkReadyPromise) {
+            await vkReadyPromise;
+        } else {
+            // Страховка: если по какой-то причине промис не создан
+            await vkBridge.send('VKWebAppInit');
+        }
 
         // Шаг 2: получаем пользовательский токен
         setProgress('Запрос разрешений...', 2, 4);
@@ -266,11 +273,24 @@ function translateVkError(error) {
 }
 
 // ─── ЗАПУСК ПРИ ЗАГРУЗКЕ ────────────────────────────────────
+// ВАЖНО: VKWebAppInit нужно вызвать СРАЗУ при загрузке страницы,
+// иначе VK через несколько секунд покажет «Сервис задумался...».
+// Кнопка «Начать настройку» лишь дожидается результата этого промиса.
 
 window.addEventListener('load', () => {
     if (typeof vkBridge === 'undefined') {
         showError('VK Bridge не загрузился. Проверьте интернет-соединение и откройте приложение заново.');
         return;
     }
+
     console.log('🌱 ArtWat Setup загружен, APP_ID =', APP_ID);
+
+    // Инициализируем VK Bridge немедленно
+    vkReadyPromise = vkBridge.send('VKWebAppInit')
+        .then(() => {
+            console.log('✅ VK Bridge инициализирован');
+        })
+        .catch((err) => {
+            console.error('❌ VKWebAppInit упал:', err);
+        });
 });
