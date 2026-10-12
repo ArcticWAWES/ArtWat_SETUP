@@ -4,16 +4,10 @@
 // ═══════════════════════════════════════════════════════════
 
 // ─── КОНФИГУРАЦИЯ ───────────────────────────────────────────
-// ⚠️ ЗАМЕНИТЕ на ваш app_id из кабинета разработчика VK
 const APP_ID = 54818456;
 
-// Название создаваемого сообщества
 const COMMUNITY_TITLE = 'ArtWat — мой автополив';
-
-// Права, которые запрашиваем у пользователя
-const USER_SCOPE = 'groups';
-
-// Права для токена сообщества
+const USER_SCOPE      = 'groups';
 const COMMUNITY_SCOPE = 'manage,messages,photos,docs';
 
 // ─── СОСТОЯНИЕ ──────────────────────────────────────────────
@@ -23,7 +17,6 @@ const state = {
     communityToken: null
 };
 
-// Промис инициализации VK Bridge (запускается сразу при загрузке)
 let vkReadyPromise = null;
 
 // ─── UI-УТИЛИТЫ ─────────────────────────────────────────────
@@ -66,13 +59,7 @@ async function startSetup() {
     setProgress('Инициализация...', 1, 4);
 
     try {
-        // Ждём завершения инициализации VK Bridge (запущена при загрузке страницы)
-        if (vkReadyPromise) {
-            await vkReadyPromise;
-        } else {
-            // Страховка: если по какой-то причине промис не создан
-            await vkBridge.send('VKWebAppInit');
-        }
+        if (vkReadyPromise) await vkReadyPromise;
 
         // Шаг 2: получаем пользовательский токен
         setProgress('Запрос разрешений...', 2, 4);
@@ -89,7 +76,6 @@ async function startSetup() {
         state.communityToken = await getCommunityToken(state.groupId, state.userToken);
         console.log('✅ Токен сообщества получен');
 
-        // Показываем результат
         showResult();
 
     } catch (err) {
@@ -114,33 +100,37 @@ async function getUserToken() {
 }
 
 // ─── ШАГ 3: СОЗДАНИЕ СООБЩЕСТВА ────────────────────────────
+// Используем VKWebAppCallAPIMethod — проксирует запрос через VK,
+// обходя CORS-ограничения прямого fetch() к api.vk.com.
 
 async function createCommunity(userToken) {
-    const params = new URLSearchParams({
-        title:        COMMUNITY_TITLE,
-        type:         'group',
-        v:            '5.199',
-        access_token: userToken
+    const data = await vkBridge.send('VKWebAppCallAPIMethod', {
+        method: 'groups.create',
+        params: {
+            title:        COMMUNITY_TITLE,
+            type:         'group',
+            v:            '5.199',
+            access_token: userToken
+        }
     });
 
-    const resp = await fetch('https://api.vk.com/method/groups.create?' + params.toString());
-    const json = await resp.json();
-
-    if (json.error) {
-        throw new Error(translateVkError(json.error));
+    // Формат ответа VK Bridge: { response: {...} } либо ошибка
+    if (data && data.response && data.response.id) {
+        return data.response.id;
     }
 
-    if (!json.response || !json.response.id) {
-        throw new Error('VK вернул неожиданный ответ при создании сообщества');
+    // Если VK вернул error — обрабатываем
+    if (data && data.error) {
+        throw new Error(translateVkError(data.error));
     }
 
-    return json.response.id;
+    throw new Error('VK вернул неожиданный ответ при создании сообщества');
 }
 
 // ─── ШАГ 4: ТОКЕН СООБЩЕСТВА ───────────────────────────────
 
 async function getCommunityToken(groupId, userToken) {
-    // Способ 1: через VK Bridge (предпочтительный)
+    // Способ 1: VKWebAppGetCommunityToken — родной метод VK Bridge
     try {
         const data = await vkBridge.send('VKWebAppGetCommunityToken', {
             app_id:   APP_ID,
@@ -156,24 +146,24 @@ async function getCommunityToken(groupId, userToken) {
         console.warn('VKWebAppGetCommunityToken не сработал:', e);
     }
 
-    // Способ 2: через API VK (groups.getToken)
+    // Способ 2: groups.getToken через VKWebAppCallAPIMethod
     try {
-        const params = new URLSearchParams({
-            group_id:     groupId,
-            v:            '5.199',
-            access_token: userToken
+        const data = await vkBridge.send('VKWebAppCallAPIMethod', {
+            method: 'groups.getToken',
+            params: {
+                group_id:     groupId,
+                v:            '5.199',
+                access_token: userToken
+            }
         });
 
-        const resp = await fetch('https://api.vk.com/method/groups.getToken?' + params.toString());
-        const json = await resp.json();
-
-        if (json.response && json.response.token) {
+        if (data && data.response && data.response.token) {
             console.log('✅ Токен получен через groups.getToken');
-            return json.response.token;
+            return data.response.token;
         }
 
-        if (json.error) {
-            console.warn('groups.getToken вернул ошибку:', json.error);
+        if (data && data.error) {
+            console.warn('groups.getToken вернул ошибку:', data.error);
         }
     } catch (e) {
         console.warn('groups.getToken не сработал:', e);
@@ -273,9 +263,6 @@ function translateVkError(error) {
 }
 
 // ─── ЗАПУСК ПРИ ЗАГРУЗКЕ ────────────────────────────────────
-// ВАЖНО: VKWebAppInit нужно вызвать СРАЗУ при загрузке страницы,
-// иначе VK через несколько секунд покажет «Сервис задумался...».
-// Кнопка «Начать настройку» лишь дожидается результата этого промиса.
 
 window.addEventListener('load', () => {
     if (typeof vkBridge === 'undefined') {
@@ -285,7 +272,6 @@ window.addEventListener('load', () => {
 
     console.log('🌱 ArtWat Setup загружен, APP_ID =', APP_ID);
 
-    // Инициализируем VK Bridge немедленно
     vkReadyPromise = vkBridge.send('VKWebAppInit')
         .then(() => {
             console.log('✅ VK Bridge инициализирован');
