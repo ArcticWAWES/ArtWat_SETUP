@@ -80,30 +80,36 @@ async function startSetup() {
 
     } catch (err) {
         console.error('❌ Ошибка:', err);
-        showError(err.message || 'Неизвестная ошибка');
+        showError(err.message || JSON.stringify(err));
     }
 }
 
 // ─── ШАГ 2: ПОЛЬЗОВАТЕЛЬСКИЙ ТОКЕН ─────────────────────────
 
 async function getUserToken() {
+    console.log('📤 Запрашиваю VKWebAppGetAuthToken...');
+
     const data = await vkBridge.send('VKWebAppGetAuthToken', {
         app_id: APP_ID,
         scope:  USER_SCOPE
     });
 
+    console.log('📥 Ответ VKWebAppGetAuthToken:', JSON.stringify(data));
+
     if (!data || !data.access_token) {
-        throw new Error('VK не выдал токен доступа. Убедитесь, что вы разрешили доступ к сообществам.');
+        throw new Error(
+            'VK не выдал токен доступа. Сырой ответ: ' + JSON.stringify(data)
+        );
     }
 
     return data.access_token;
 }
 
 // ─── ШАГ 3: СОЗДАНИЕ СООБЩЕСТВА ────────────────────────────
-// Используем VKWebAppCallAPIMethod — проксирует запрос через VK,
-// обходя CORS-ограничения прямого fetch() к api.vk.com.
 
 async function createCommunity(userToken) {
+    console.log('📤 Отправляю groups.create...');
+
     const data = await vkBridge.send('VKWebAppCallAPIMethod', {
         method: 'groups.create',
         params: {
@@ -114,17 +120,27 @@ async function createCommunity(userToken) {
         }
     });
 
-    // Формат ответа VK Bridge: { response: {...} } либо ошибка
-    if (data && data.response && data.response.id) {
+    // 🔍 Сырой ответ от VK — ключевая информация для отладки
+    console.log('📥 Ответ groups.create:', JSON.stringify(data));
+
+    if (!data) {
+        throw new Error('VK вернул пустой ответ: ' + String(data));
+    }
+
+    if (data.error) {
+        throw new Error(
+            translateVkError(data.error) +
+            '\n\nСырой ответ VK: ' + JSON.stringify(data.error)
+        );
+    }
+
+    if (data.response && data.response.id) {
         return data.response.id;
     }
 
-    // Если VK вернул error — обрабатываем
-    if (data && data.error) {
-        throw new Error(translateVkError(data.error));
-    }
-
-    throw new Error('VK вернул неожиданный ответ при создании сообщества');
+    throw new Error(
+        'Неожиданная структура ответа VK: ' + JSON.stringify(data)
+    );
 }
 
 // ─── ШАГ 4: ТОКЕН СООБЩЕСТВА ───────────────────────────────
@@ -132,22 +148,28 @@ async function createCommunity(userToken) {
 async function getCommunityToken(groupId, userToken) {
     // Способ 1: VKWebAppGetCommunityToken — родной метод VK Bridge
     try {
+        console.log('📤 Запрашиваю VKWebAppGetCommunityToken...');
+
         const data = await vkBridge.send('VKWebAppGetCommunityToken', {
             app_id:   APP_ID,
             group_id: groupId,
             scope:    COMMUNITY_SCOPE
         });
 
+        console.log('📥 Ответ VKWebAppGetCommunityToken:', JSON.stringify(data));
+
         if (data && data.access_token) {
             console.log('✅ Токен получен через VKWebAppGetCommunityToken');
             return data.access_token;
         }
     } catch (e) {
-        console.warn('VKWebAppGetCommunityToken не сработал:', e);
+        console.warn('⚠️ VKWebAppGetCommunityToken не сработал:', e);
     }
 
     // Способ 2: groups.getToken через VKWebAppCallAPIMethod
     try {
+        console.log('📤 Пробую groups.getToken...');
+
         const data = await vkBridge.send('VKWebAppCallAPIMethod', {
             method: 'groups.getToken',
             params: {
@@ -157,23 +179,24 @@ async function getCommunityToken(groupId, userToken) {
             }
         });
 
+        console.log('📥 Ответ groups.getToken:', JSON.stringify(data));
+
         if (data && data.response && data.response.token) {
             console.log('✅ Токен получен через groups.getToken');
             return data.response.token;
         }
 
         if (data && data.error) {
-            console.warn('groups.getToken вернул ошибку:', data.error);
+            console.warn('⚠️ groups.getToken вернул ошибку:', data.error);
         }
     } catch (e) {
-        console.warn('groups.getToken не сработал:', e);
+        console.warn('⚠️ groups.getToken не сработал:', e);
     }
 
-    // Оба способа провалились — сообщество создано, но токен получить не удалось
     throw new Error(
-        'Сообщество создано (ID: ' + groupId + '), но автоматически получить токен не удалось. ' +
-        'Пожалуйста, откройте сообщество в VK вручную, перейдите в Управление → Работа с API → ' +
-        'Создать ключ доступа и выберите права: управление сообществом, сообщения, фотографии, документы.'
+        'Сообщество создано (ID: ' + groupId + '), но автоматически получить токен не удалось.\n\n' +
+        'Откройте сообщество в VK вручную: Управление → Работа с API → ' +
+        'Создать ключ доступа. Выберите права: управление сообществом, сообщения, фотографии, документы.'
     );
 }
 
@@ -253,6 +276,7 @@ function translateVkError(error) {
         14:  'Требуется ввод капчи. Откройте VK в браузере и попробуйте снова.',
         15:  'Доступ запрещён. Убедитесь, что вы разрешили управление сообществами.',
         100: 'Один из параметров указан неверно.',
+        121: 'Нет прав на создание сообщества.',
         200: 'Доступ к сообществу запрещён.',
         203: 'Вы не являетесь администратором этого сообщества.',
         260: 'Не удалось создать сообщество. Возможно, достигнут лимит.',
