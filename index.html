@@ -1,1 +1,381 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ArtWat — Активация</title>
+<style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+    :root {
+        --purple: #8d369f;
+        --purple-dark: #6d2880;
+        --purple-light: #f4e8f7;
+        --white: #ffffff;
+    }
+
+    html, body {
+        margin: 0;
+        padding: 0;
+    }
+
+    body {
+        font-family: Arial, Helvetica, sans-serif;
+        background: #d8dde3;
+        color: #1a1a1a;
+        min-height: 100vh;
+    }
+
+    .phone {
+        max-width: 420px;
+        margin: 0 auto;
+        background: #fafafa;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .header {
+        background: var(--purple);
+        color: var(--white);
+        padding: 28px 20px 24px;
+        text-align: center;
+    }
+
+    .header .logo-img {
+        height: 72px;
+        width: auto;
+        margin-bottom: 10px;
+        display: inline-block;
+    }
+
+    .header .subtitle {
+        margin-top: 6px;
+        font-size: 14px;
+        opacity: 0.95;
+        letter-spacing: 0.3px;
+        color: var(--white);
+    }
+
+    .container {
+        padding: 20px;
+        width: 100%;
+        flex: 1;
+    }
+
+    .card {
+        background: white;
+        border-radius: 14px;
+        padding: 22px 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 10px rgba(141, 54, 159, 0.08);
+        border: 1px solid #f0e8f2;
+    }
+
+    .card h2 {
+        margin: 0 0 12px;
+        font-size: 17px;
+        font-weight: bold;
+        font-family: 'Arial Black', Arial, sans-serif;
+        color: var(--purple);
+        letter-spacing: -0.2px;
+    }
+
+    .card p {
+        margin: 8px 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #555;
+    }
+
+    .progress {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 20px;
+        background: white;
+        border-radius: 14px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 10px rgba(141, 54, 159, 0.08);
+        border: 1px solid #f0e8f2;
+    }
+
+    .spinner {
+        width: 24px;
+        height: 24px;
+        border: 3px solid #ead9ee;
+        border-top-color: var(--purple);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .progress-text {
+        font-size: 14px;
+        color: #333;
+        font-weight: bold;
+    }
+
+    .progress-step {
+        font-size: 12px;
+        color: #999;
+        margin-top: 3px;
+    }
+
+    .success-title {
+        text-align: center;
+        font-size: 20px;
+        font-weight: 900;
+        font-family: 'Arial Black', Arial, sans-serif;
+        color: var(--purple);
+        margin-bottom: 6px;
+        letter-spacing: -0.5px;
+    }
+
+    .success-sub {
+        text-align: center;
+        font-size: 13px;
+        color: #888;
+        margin-bottom: 20px;
+    }
+
+    .field-block {
+        background: var(--purple-light);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 12px;
+        border: 1px solid #e5d0ea;
+    }
+
+    .field-label {
+        font-size: 11px;
+        color: var(--purple);
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        margin-bottom: 6px;
+        font-weight: bold;
+    }
+
+    .field-value {
+        font-family: Consolas, Monaco, monospace;
+        font-size: 13px;
+        color: #1a1a1a;
+        word-break: break-all;
+        line-height: 1.5;
+    }
+
+    button {
+        width: 100%;
+        padding: 15px;
+        border: none;
+        border-radius: 10px;
+        font-size: 15px;
+        font-weight: bold;
+        font-family: Arial, sans-serif;
+        cursor: pointer;
+        transition: transform 0.1s, background 0.15s;
+        margin-bottom: 10px;
+        letter-spacing: 0.2px;
+    }
+
+    button:active { transform: scale(0.98); }
+
+    .btn-primary { background: var(--purple); color: var(--white); }
+    .btn-primary:active { background: var(--purple-dark); }
+
+    .btn-secondary {
+        background: #f0e8f2;
+        color: var(--purple);
+        border: 1px solid #e5d0ea;
+    }
+    .btn-secondary:active { background: #e5d0ea; }
+
+    .error-title {
+        text-align: center;
+        font-size: 18px;
+        font-weight: 900;
+        font-family: 'Arial Black', Arial, sans-serif;
+        color: #c0392b;
+        margin-bottom: 8px;
+    }
+
+    .error-details {
+        background: #fdf2f2;
+        border: 1px solid #f5d0d0;
+        border-radius: 10px;
+        padding: 12px;
+        font-size: 13px;
+        color: #7a2929;
+        margin: 16px 0;
+        line-height: 1.5;
+        word-break: break-word;
+    }
+
+    .steps {
+        counter-reset: step;
+        list-style: none;
+        padding: 0;
+        margin: 8px 0 0;
+    }
+
+    .steps li {
+        counter-increment: step;
+        padding: 10px 0 10px 40px;
+        position: relative;
+        font-size: 14px;
+        color: #444;
+        line-height: 1.5;
+        border-bottom: 1px solid #f4e8f7;
+    }
+
+    .steps li:last-child { border-bottom: none; }
+
+    .steps li::before {
+        content: counter(step);
+        position: absolute;
+        left: 0;
+        top: 10px;
+        width: 26px;
+        height: 26px;
+        background: var(--purple);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: bold;
+        font-family: 'Arial Black', Arial, sans-serif;
+    }
+
+    .footer {
+        text-align: center;
+        padding: 16px;
+        font-size: 11px;
+        color: #aaa;
+    }
+
+    .hidden { display: none !important; }
+
+    /* Тост */
+    .toast {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(120px);
+        background: #333;
+        color: white;
+        padding: 12px 22px;
+        border-radius: 24px;
+        font-size: 14px;
+        font-weight: bold;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        transition: transform 0.3s ease;
+        z-index: 1000;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+
+    .toast.show {
+        transform: translateX(-50%) translateY(0);
+    }
+</style>
+</head>
+<body>
+
+<div class="phone">
+
+    <!-- ─── ШАПКА (общая для всех экранов) ─── -->
+    <div class="header">
+        <img src="logo.png" alt="ArtWat" class="logo-img">
+        <div class="subtitle">Активация умного автополива</div>
+    </div>
+
+    <div class="container">
+
+        <!-- ═══ ЭКРАН 1: ПРИВЕТСТВИЕ ═══ -->
+        <div id="screen-welcome">
+            <div class="card">
+                <h2>Добро пожаловать!</h2>
+                <p>Это приложение автоматически создаст для вас сообщество ВКонтакте с ботом для управления устройством ArtWat.</p>
+                <p>Вам не нужно ничего настраивать вручную — просто нажмите кнопку ниже и разрешите доступ.</p>
+                <button class="btn-primary" style="margin-top: 16px;" onclick="startSetup()">НАЧАТЬ НАСТРОЙКУ</button>
+            </div>
+        </div>
+
+        <!-- ═══ ЭКРАН 2: ЗАГРУЗКА ═══ -->
+        <div id="screen-loading" class="hidden">
+            <div class="progress">
+                <div class="spinner"></div>
+                <div>
+                    <div class="progress-text" id="progress-text">Инициализация...</div>
+                    <div class="progress-step" id="progress-step">Шаг 1 из 4</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ ЭКРАН 3: УСПЕХ ═══ -->
+        <div id="screen-success" class="hidden">
+            <div class="card">
+                <div class="success-title">ГОТОВО!</div>
+                <div class="success-sub">Ваш бот создан и готов к работе</div>
+
+                <div class="field-block">
+                    <div class="field-label">Group ID</div>
+                    <div class="field-value" id="result-group-id">—</div>
+                </div>
+
+                <div class="field-block">
+                    <div class="field-label">Access Token</div>
+                    <div class="field-value" id="result-token">—</div>
+                </div>
+
+                <button class="btn-primary" onclick="copyAll()">СКОПИРОВАТЬ</button>
+                <button class="btn-secondary" onclick="openVkGroup()">ОТКРЫТЬ СООБЩЕСТВО В VK</button>
+            </div>
+
+            <div class="card">
+                <h2>Что делать дальше</h2>
+                <ol class="steps">
+                    <li>Нажмите «Скопировать» выше</li>
+                    <li>Включите устройство и подключитесь к Wi-Fi сети <b>ArtWAT_system</b></li>
+                    <li>Если страница не открылась — откройте браузер и перейдите по адресу <b>http://192.168.4.1</b></li>
+                    <li>Вставьте скопированные данные в поля формы</li>
+                    <li>Сохраните настройки — устройство перезагрузится и подключится к VK</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- ═══ ЭКРАН 4: ОШИБКА ═══ -->
+        <div id="screen-error" class="hidden">
+            <div class="card">
+                <div class="error-title">НЕ УДАЛОСЬ ЗАВЕРШИТЬ НАСТРОЙКУ</div>
+                <div class="error-details" id="error-details">—</div>
+                <button class="btn-primary" onclick="retry()">ПОПРОБОВАТЬ СНОВА</button>
+                <button class="btn-secondary" onclick="toggleHelp()">ЧТО ДЕЛАТЬ?</button>
+            </div>
+
+            <div id="help-block" class="card hidden">
+                <h2>Возможные причины</h2>
+                <p><b>1.</b> Вы не дали разрешение на управление сообществами — попробуйте снова и нажмите «Разрешить».</p>
+                <p><b>2.</b> У вас уже достигнут лимит сообществ в VK — удалите неиспользуемые.</p>
+                <p><b>3.</b> Временная ошибка VK — подождите пару минут и повторите.</p>
+                <p><b>4.</b> Проблема с интернетом — проверьте подключение.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="footer">ArtWat © 2025 · Управление автополивом через VK</div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+<script src="script.js"></script>
+
+</body>
+</html>
