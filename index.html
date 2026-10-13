@@ -311,6 +311,30 @@
         line-height: 1.5;
     }
 
+    /* ─── Экран "включите бота" ─── */
+    .instruction-block {
+        margin: 16px 0;
+        padding: 16px;
+        background: #f7f8fa;
+        border-radius: 10px;
+        border: 1px solid #e8eaed;
+    }
+
+    .instruction-block .instr-title {
+        margin: 0 0 10px;
+        font-weight: bold;
+        font-size: 14px;
+        color: #333;
+    }
+
+    .instruction-block ol {
+        margin: 0;
+        padding-left: 20px;
+        font-size: 14px;
+        line-height: 1.8;
+        color: #444;
+    }
+
     .footer {
         text-align: center;
         padding: 16px;
@@ -372,7 +396,7 @@
                 <div class="spinner"></div>
                 <div>
                     <div class="progress-text" id="progress-text">Инициализация...</div>
-                    <div class="progress-step" id="progress-step">Шаг 1 из 4</div>
+                    <div class="progress-step" id="progress-step">Шаг 1 из 5</div>
                 </div>
             </div>
         </div>
@@ -391,11 +415,42 @@
             </div>
         </div>
 
-        <!-- ═══ ЭКРАН 4: УСПЕХ ═══ -->
+        <!-- ═══ ЭКРАН 4: ВКЛЮЧИТЕ БОТА ═══ -->
+        <div id="screen-bots-off" class="hidden">
+            <div class="card">
+                <div class="error-title">НУЖНО ВКЛЮЧИТЬ БОТА</div>
+                <div class="success-sub">
+                    В сообществе «<span id="bots-off-group-name">—</span>»<br>
+                    выключены возможности ботов
+                </div>
+
+                <div class="instruction-block">
+                    <p class="instr-title">Как включить:</p>
+                    <ol>
+                        <li>Нажмите «Открыть настройки сообщества»</li>
+                        <li>Перейдите в «Управление» → «Сообщения»</li>
+                        <li>Включите «Возможности ботов»</li>
+                        <li>Вернитесь сюда и нажмите «Проверить снова»</li>
+                    </ol>
+                </div>
+
+                <button class="btn-primary" onclick="openGroupSettings()">
+                    ОТКРЫТЬ НАСТРОЙКИ СООБЩЕСТВА
+                </button>
+                <button class="btn-secondary" onclick="checkBotsCapabilityAndProceed()">
+                    Я ВКЛЮЧИЛ, ПРОВЕРИТЬ СНОВА
+                </button>
+                <button class="btn-secondary" onclick="retry()" style="margin-top: 6px;">
+                    НАЗАД К ВЫБОРУ СООБЩЕСТВА
+                </button>
+            </div>
+        </div>
+
+        <!-- ═══ ЭКРАН 5: УСПЕХ ═══ -->
         <div id="screen-success" class="hidden">
             <div class="card">
                 <div class="success-title">ГОТОВО!</div>
-                <div class="success-sub">Ваш бот привязан и готов к работе</div>
+                <div class="success-sub" id="success-subtitle">Ваш бот привязан и готов к работе</div>
 
                 <div class="field-block">
                     <div class="field-label">Group ID</div>
@@ -423,7 +478,7 @@
             </div>
         </div>
 
-        <!-- ═══ ЭКРАН 5: ОШИБКА ═══ -->
+        <!-- ═══ ЭКРАН 6: ОШИБКА ═══ -->
         <div id="screen-error" class="hidden">
             <div class="card">
                 <div class="error-title">НЕ УДАЛОСЬ ЗАВЕРШИТЬ НАСТРОЙКУ</div>
@@ -453,5 +508,4 @@
 <script src="script.js"></script>
 
 </body>
-</html>
 </html>
