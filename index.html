@@ -163,7 +163,6 @@
         line-height: 1.5;
     }
 
-    /* ─── Поле с кнопкой копирования ─── */
     .field-with-copy {
         display: flex;
         align-items: stretch;
@@ -298,7 +297,6 @@
         font-family: 'Arial Black', Arial, sans-serif;
     }
 
-    /* ─── Список сообществ ─── */
     .communities-list {
         margin: 12px 0;
     }
@@ -362,7 +360,6 @@
         line-height: 1.5;
     }
 
-    /* ─── Чеклист ─── */
     .checklist-item {
         display: flex;
         align-items: flex-start;
@@ -470,7 +467,6 @@
 
     .hidden { display: none !important; }
 
-    /* Тост */
     .toast {
         position: fixed;
         bottom: 24px;
@@ -498,7 +494,6 @@
 
 <div class="phone">
 
-    <!-- ─── ШАПКА ─── -->
     <div class="header">
         <img src="logo.png" alt="ArtWat" class="logo-img">
         <div class="subtitle">Активация умного автополива</div>
@@ -506,7 +501,7 @@
 
     <div class="container">
 
-        <!-- ═══ ЭКРАН 1: ПРИВЕТСТВИЕ ═══ -->
+        <!-- ЭКРАН 1: ПРИВЕТСТВИЕ -->
         <div id="screen-welcome">
             <div class="card">
                 <h2>Добро пожаловать!</h2>
@@ -516,7 +511,7 @@
             </div>
         </div>
 
-        <!-- ═══ ЭКРАН 2: ЗАГРУЗКА ═══ -->
+        <!-- ЭКРАН 2: ЗАГРУЗКА -->
         <div id="screen-loading" class="hidden">
             <div class="progress">
                 <div class="spinner"></div>
@@ -527,21 +522,19 @@
             </div>
         </div>
 
-        <!-- ═══ ЭКРАН 3: ВЫБОР СООБЩЕСТВА ═══ -->
+        <!-- ЭКРАН 3: ВЫБОР СООБЩЕСТВА -->
         <div id="screen-communities" class="hidden">
             <div class="card">
                 <div class="success-title" id="communities-title">ВЫБЕРИТЕ СООБЩЕСТВО</div>
                 <div class="success-sub" id="communities-sub">В котором вы администратор</div>
 
-                <div id="communities-list" class="communities-list">
-                    <!-- Заполняется динамически -->
-                </div>
+                <div id="communities-list" class="communities-list"></div>
 
                 <button class="btn-secondary" onclick="retry()" style="margin-top: 16px;">НАЗАД</button>
             </div>
         </div>
 
-        <!-- ═══ ЭКРАН 4: ЧЕКЛИСТ ═══ -->
+        <!-- ЭКРАН 4: ЧЕКЛИСТ -->
         <div id="screen-checklist" class="hidden">
             <div class="card">
                 <div class="success-title">ВКЛЮЧИТЕ БОТА</div>
@@ -590,7 +583,7 @@
             </div>
         </div>
 
-        <!-- ═══ ЭКРАН 5: УСПЕХ ═══ -->
+        <!-- ЭКРАН 5: УСПЕХ -->
         <div id="screen-success" class="hidden">
             <div class="card">
                 <div class="success-title">ГОТОВО!</div>
@@ -627,9 +620,17 @@
             </div>
 
             <div class="card">
+                <h2>Обновить аватарку</h2>
+                <p>Скачайте готовую аватарку ArtWat и установите её в настройках сообщества, чтобы оно выглядело фирменно.</p>
+                <button class="btn-secondary" onclick="downloadAvatar()" style="margin-top: 12px;">
+                    СКАЧАТЬ АВАТАРКУ
+                </button>
+            </div>
+
+            <div class="card">
                 <h2>Что делать дальше</h2>
                 <ol class="steps">
-                    <li>Нажмите «Скопировать» выше</li>
+                    <li>Нажмите «Скопировать всё» выше</li>
                     <li>Включите устройство и подключитесь к Wi-Fi сети <b>ArtWAT_system</b></li>
                     <li>Если страница не открылась — откройте браузер и перейдите по адресу <b>http://192.168.4.1</b></li>
                     <li>Вставьте скопированные данные в поля формы</li>
@@ -638,7 +639,7 @@
             </div>
         </div>
 
-        <!-- ═══ ЭКРАН 6: ОШИБКА ═══ -->
+        <!-- ЭКРАН 6: ОШИБКА -->
         <div id="screen-error" class="hidden">
             <div class="card">
                 <div class="error-title">НЕ УДАЛОСЬ ЗАВЕРШИТЬ НАСТРОЙКУ</div>
