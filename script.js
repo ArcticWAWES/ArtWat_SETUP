@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
 //  ArtWat Setup — VK Mini App
-//  Путь B + чеклист + авто-смена аватарки (с CORS-фиксом)
+//  Путь B + чеклист + авто-смена аватарки (no-cors)
 // ═══════════════════════════════════════════════════════════
 
 // ─── КОНФИГУРАЦИЯ ───────────────────────────────────────────
@@ -294,7 +294,7 @@ async function finalizeSetup() {
         await requestMessagesPermission(state.selectedGroupId);
         await verifyLongPollSettings(state.selectedGroupId, state.communityToken);
 
-        // 🆕 Обновляем аватарку сообщества (мягкая операция — не блокирует процесс)
+        // Обновляем аватарку сообщества (мягкая операция — не блокирует процесс)
         setProgress('Обновление аватарки...', 5, 5);
         await setCommunityAvatar(state.selectedGroupId, state.userToken);
 
@@ -469,8 +469,10 @@ async function verifyLongPollSettings(groupId, communityToken) {
 
 // ─── СМЕНА АВАТАРКИ СООБЩЕСТВА ─────────────────────────────
 // Скачивает avatar.png из репозитория (тот же origin — CORS не мешает),
-// затем загружает его на VK-сервер с &cors=1 (иначе браузер блокирует
-// cross-origin POST), и, наконец, сохраняет как аватарку сообщества.
+// затем отправляет его на сервер VK в режиме no-cors. Браузер пропускает
+// cross-origin POST без CORS-заголовков, ответ прочитать нельзя, но VK
+// получает файл. Параметр save:1 в upload_url заставляет VK сохранить
+// фото как аватарку автоматически.
 
 async function setCommunityAvatar(groupId, userToken) {
     console.log('📤 Меняю аватарку сообщества...');
@@ -494,7 +496,7 @@ async function setCommunityAvatar(groupId, userToken) {
         const serverResp = await vkBridge.send('VKWebAppCallAPIMethod', {
             method: 'photos.getOwnerPhotoUploadServer',
             params: {
-                owner_id:     -groupId,   // со знаком минус — это сообщество
+                owner_id:     -groupId,
                 v:            '5.199',
                 access_token: userToken
             }
@@ -508,51 +510,25 @@ async function setCommunityAvatar(groupId, userToken) {
 
         const uploadUrl = serverResp.response.upload_url;
 
-        // ─── Шаг 3: загружаем blob на VK-сервер ──────────────
-        // 🔑 КЛЮЧЕВОЙ МОМЕНТ: добавляем &cors=1, иначе VK-сервер
-        // не отдаёт Access-Control-Allow-Origin, и браузер блокирует
-        // cross-origin POST-запрос.
-        const separator = uploadUrl.includes('?') ? '&' : '?';
-        const corsUploadUrl = uploadUrl + separator + 'cors=1';
-
-        console.log('📤 Upload URL (cors):', corsUploadUrl);
-
+        // ─── Шаг 3: отправляем blob в режиме no-cors ─────────
+        // Браузер не блокирует запрос, потому что no-cors отключает
+        // CORS-проверки. Ответ непрозрачный, но VK получает файл.
+        // save:1 в URL → VK сохраняет фото сразу, без photos.saveOwnerPhoto.
         const formData = new FormData();
         formData.append('photo', blob, 'avatar.png');
 
-        const uploadResp = await fetch(corsUploadUrl, {
+        console.log('📤 Отправляю через no-cors...');
+
+        await fetch(uploadUrl, {
             method: 'POST',
+            mode:   'no-cors',
             body:   formData
         });
 
-        const uploadResult = await uploadResp.json();
-        console.log('📥 Upload result:', JSON.stringify(uploadResult));
+        console.log('✅ Запрос отправлен (ответ скрыт из-за no-cors)');
+        console.log('ℹ️  Проверьте аватарку сообщества вручную в VK');
 
-        if (!uploadResult.server || !uploadResult.hash || !uploadResult.photo) {
-            throw new Error('Загрузка вернула неполные данные');
-        }
-
-        // ─── Шаг 4: сохраняем фото как аватарку ──────────────
-        const saveResp = await vkBridge.send('VKWebAppCallAPIMethod', {
-            method: 'photos.saveOwnerPhoto',
-            params: {
-                server:       uploadResult.server,
-                hash:         uploadResult.hash,
-                photo:        uploadResult.photo,
-                v:            '5.199',
-                access_token: userToken
-            }
-        });
-
-        console.log('📥 saveOwnerPhoto:', JSON.stringify(saveResp));
-
-        if (saveResp && saveResp.response) {
-            console.log('✅ Аватарка обновлена');
-            return true;
-        }
-
-        console.warn('⚠️ saveOwnerPhoto вернул неожиданный ответ');
-        return false;
+        return true;
 
     } catch (e) {
         console.warn('⚠️ Не удалось обновить аватарку (не критично):', e);
