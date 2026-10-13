@@ -1,12 +1,12 @@
 // ═══════════════════════════════════════════════════════════
 //  ArtWat Setup — VK Mini App
-//  Путь B + чеклист + авто-смена аватарки (no-cors)
+//  Путь B + чеклист + скачивание аватарки
 // ═══════════════════════════════════════════════════════════
 
 // ─── КОНФИГУРАЦИЯ ───────────────────────────────────────────
 const APP_ID = 54818456;
 
-const USER_SCOPE      = 'groups,photos';
+const USER_SCOPE      = 'groups';
 const COMMUNITY_SCOPE = 'manage,messages,photos,docs';
 
 // Путь к аватарке, которая лежит рядом с index.html
@@ -294,10 +294,6 @@ async function finalizeSetup() {
         await requestMessagesPermission(state.selectedGroupId);
         await verifyLongPollSettings(state.selectedGroupId, state.communityToken);
 
-        // Обновляем аватарку сообщества (мягкая операция — не блокирует процесс)
-        setProgress('Обновление аватарки...', 5, 5);
-        await setCommunityAvatar(state.selectedGroupId, state.userToken);
-
         showResult();
 
     } catch (err) {
@@ -467,73 +463,20 @@ async function verifyLongPollSettings(groupId, communityToken) {
     }
 }
 
-// ─── СМЕНА АВАТАРКИ СООБЩЕСТВА ─────────────────────────────
-// Скачивает avatar.png из репозитория (тот же origin — CORS не мешает),
-// затем отправляет его на сервер VK в режиме no-cors. Браузер пропускает
-// cross-origin POST без CORS-заголовков, ответ прочитать нельзя, но VK
-// получает файл. Параметр save:1 в upload_url заставляет VK сохранить
-// фото как аватарку автоматически.
+// ─── СКАЧИВАНИЕ АВАТАРКИ ───────────────────────────────────
+// Автоматически загрузить аватарку на VK нельзя из-за CORS —
+// файловый сервер VK (pu.vk.ru) не отдаёт заголовки Access-Control-Allow-Origin.
+// Поэтому даём пользователю скачать картинку и поставить её вручную.
 
-async function setCommunityAvatar(groupId, userToken) {
-    console.log('📤 Меняю аватарку сообщества...');
+function downloadAvatar() {
+    const link = document.createElement('a');
+    link.href = AVATAR_URL;
+    link.download = 'artwat_avatar.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 
-    try {
-        // ─── Шаг 1: скачиваем avatar.png как Blob ────────────
-        const fileResp = await fetch(AVATAR_URL);
-
-        if (!fileResp.ok) {
-            throw new Error('Не удалось загрузить avatar.png: HTTP ' + fileResp.status);
-        }
-
-        const blob = await fileResp.blob();
-        console.log('📦 avatar.png загружен, размер:', blob.size, 'байт');
-
-        if (blob.size === 0) {
-            throw new Error('avatar.png пустой');
-        }
-
-        // ─── Шаг 2: получаем upload_url у VK ─────────────────
-        const serverResp = await vkBridge.send('VKWebAppCallAPIMethod', {
-            method: 'photos.getOwnerPhotoUploadServer',
-            params: {
-                owner_id:     -groupId,
-                v:            '5.199',
-                access_token: userToken
-            }
-        });
-
-        console.log('📥 Ответ getOwnerPhotoUploadServer:', JSON.stringify(serverResp));
-
-        if (!serverResp || !serverResp.response || !serverResp.response.upload_url) {
-            throw new Error('Не удалось получить upload_url');
-        }
-
-        const uploadUrl = serverResp.response.upload_url;
-
-        // ─── Шаг 3: отправляем blob в режиме no-cors ─────────
-        // Браузер не блокирует запрос, потому что no-cors отключает
-        // CORS-проверки. Ответ непрозрачный, но VK получает файл.
-        // save:1 в URL → VK сохраняет фото сразу, без photos.saveOwnerPhoto.
-        const formData = new FormData();
-        formData.append('photo', blob, 'avatar.png');
-
-        console.log('📤 Отправляю через no-cors...');
-
-        await fetch(uploadUrl, {
-            method: 'POST',
-            mode:   'no-cors',
-            body:   formData
-        });
-
-        console.log('✅ Запрос отправлен (ответ скрыт из-за no-cors)');
-        console.log('ℹ️  Проверьте аватарку сообщества вручную в VK');
-
-        return true;
-
-    } catch (e) {
-        console.warn('⚠️ Не удалось обновить аватарку (не критично):', e);
-        return false;
-    }
+    showToast('Аватарка скачана');
 }
 
 // ─── ПОКАЗ РЕЗУЛЬТАТА ──────────────────────────────────────
