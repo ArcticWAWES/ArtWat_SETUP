@@ -1,606 +1,671 @@
-// ═══════════════════════════════════════════════════════════
-//  ArtWat Setup — VK Mini App
-//  Путь B + чеклист + скачивание аватарки
-// ═══════════════════════════════════════════════════════════
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ArtWat — Активация</title>
+<style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-// ─── КОНФИГУРАЦИЯ ───────────────────────────────────────────
-const APP_ID = 54818456;
-
-const USER_SCOPE      = 'groups';
-const COMMUNITY_SCOPE = 'manage,messages,photos,docs';
-
-// Путь к аватарке, которая лежит рядом с index.html
-const AVATAR_URL = 'avatar.png';
-
-// ─── СОСТОЯНИЕ ──────────────────────────────────────────────
-const state = {
-    userToken:       null,
-    communities:     [],
-    selectedGroupId: null,
-    communityToken:  null,
-    longPollEnabled: false,
-    messagesAllowed: false,
-    checklistDone:   false,
-    settingsUrl:     ''
-};
-
-let vkReadyPromise = null;
-
-// ─── UI-УТИЛИТЫ ─────────────────────────────────────────────
-
-const $ = (id) => document.getElementById(id);
-
-function showScreen(name) {
-    ['welcome', 'loading', 'communities', 'checklist', 'success', 'error'].forEach(s => {
-        const el = $('screen-' + s);
-        if (el) el.classList.toggle('hidden', s !== name);
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function setProgress(text, stepNum, stepTotal) {
-    $('progress-text').textContent = text;
-    $('progress-step').textContent = `Шаг ${stepNum} из ${stepTotal}`;
-}
-
-function showError(details) {
-    $('error-details').textContent = details;
-    showScreen('error');
-}
-
-function showToast(message) {
-    const toast = $('toast');
-    toast.textContent = message;
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 2000);
-}
-
-function toggleHelp() {
-    $('help-block').classList.toggle('hidden');
-}
-
-function escapeHtml(str) {
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
-// ─── ОСНОВНАЯ ЛОГИКА ────────────────────────────────────────
-
-async function startSetup() {
-    showScreen('loading');
-    setProgress('Инициализация...', 1, 5);
-
-    try {
-        if (vkReadyPromise) await vkReadyPromise;
-
-        setProgress('Запрос разрешений...', 2, 5);
-        state.userToken = await getUserToken();
-        console.log('✅ Токен пользователя получен');
-
-        setProgress('Загрузка сообществ...', 3, 5);
-        state.communities = await getAdminCommunities(state.userToken);
-        console.log('✅ Загружено сообществ:', state.communities.length);
-
-        if (state.communities.length === 0) {
-            showNoCommunities();
-            return;
-        }
-
-        showCommunityList();
-
-    } catch (err) {
-        console.error('❌ Ошибка:', err);
-        showError(err.message || JSON.stringify(err));
-    }
-}
-
-// ─── ШАГ 2: ПОЛЬЗОВАТЕЛЬСКИЙ ТОКЕН ─────────────────────────
-
-async function getUserToken() {
-    console.log('📤 Запрашиваю VKWebAppGetAuthToken...');
-
-    const data = await vkBridge.send('VKWebAppGetAuthToken', {
-        app_id: APP_ID,
-        scope:  USER_SCOPE
-    });
-
-    console.log('📥 Ответ VKWebAppGetAuthToken:', JSON.stringify(data));
-
-    if (!data || !data.access_token) {
-        throw new Error(
-            'VK не выдал токен доступа. Сырой ответ: ' + JSON.stringify(data)
-        );
+    :root {
+        --purple: #8d369f;
+        --purple-dark: #6d2880;
+        --purple-light: #f4e8f7;
+        --white: #ffffff;
     }
 
-    return data.access_token;
-}
+    html, body { margin: 0; padding: 0; }
 
-// ─── ШАГ 3: СПИСОК СООБЩЕСТВ ───────────────────────────────
-
-async function getAdminCommunities(userToken) {
-    console.log('📤 Запрашиваю groups.get...');
-
-    const data = await vkBridge.send('VKWebAppCallAPIMethod', {
-        method: 'groups.get',
-        params: {
-            filter:       'admin',
-            extended:     '1',
-            fields:       'photo_100,members_count',
-            v:            '5.199',
-            access_token: userToken
-        }
-    });
-
-    console.log('📥 Ответ groups.get:', JSON.stringify(data));
-
-    if (data && data.error) {
-        throw new Error(translateVkError(data.error));
+    body {
+        font-family: Arial, Helvetica, sans-serif;
+        background: #d8dde3;
+        color: #1a1a1a;
+        min-height: 100vh;
     }
 
-    if (!data || !data.response) {
-        throw new Error('VK вернул неожиданный ответ: ' + JSON.stringify(data));
+    .phone {
+        max-width: 420px;
+        margin: 0 auto;
+        background: #fafafa;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
     }
 
-    const items = data.response.items || [];
+    .header {
+        background: var(--purple);
+        color: var(--white);
+        padding: 32px 20px 28px;
+        text-align: center;
+    }
 
-    return items.map(item => ({
-        id:          item.id,
-        name:        item.name,
-        screen_name: item.screen_name,
-        photo:       item.photo_100 || ''
-    }));
-}
+    .header .logo-img {
+        height: 130px;
+        width: auto;
+        margin-bottom: 14px;
+        display: inline-block;
+    }
 
-// ─── СПИСОК СООБЩЕСТВ ──────────────────────────────────────
+    .header .subtitle {
+        margin-top: 6px;
+        font-size: 14px;
+        opacity: 0.95;
+        letter-spacing: 0.3px;
+        color: var(--white);
+    }
 
-function showCommunityList() {
-    const listEl = $('communities-list');
-    if (!listEl) return;
+    .container {
+        padding: 20px;
+        width: 100%;
+        flex: 1;
+    }
 
-    $('communities-title').textContent = 'ВЫБЕРИТЕ СООБЩЕСТВО';
-    $('communities-sub').textContent   = 'В котором вы администратор';
+    .card {
+        background: white;
+        border-radius: 14px;
+        padding: 22px 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 10px rgba(141, 54, 159, 0.08);
+        border: 1px solid #f0e8f2;
+    }
 
-    listEl.innerHTML = '';
+    .card h2 {
+        margin: 0 0 12px;
+        font-size: 17px;
+        font-weight: bold;
+        font-family: 'Arial Black', Arial, sans-serif;
+        color: var(--purple);
+        letter-spacing: -0.2px;
+    }
 
-    state.communities.forEach(c => {
-        const item = document.createElement('div');
-        item.className = 'community-item';
-        item.innerHTML = `
-            <img src="${escapeHtml(c.photo)}" alt="" class="community-photo">
-            <div class="community-info">
-                <div class="community-name">${escapeHtml(c.name)}</div>
-                <div class="community-id">ID: ${c.id}</div>
+    .card p {
+        margin: 8px 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #555;
+    }
+
+    .progress {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 20px;
+        background: white;
+        border-radius: 14px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 10px rgba(141, 54, 159, 0.08);
+        border: 1px solid #f0e8f2;
+    }
+
+    .spinner {
+        width: 24px;
+        height: 24px;
+        border: 3px solid #ead9ee;
+        border-top-color: var(--purple);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .progress-text {
+        font-size: 14px;
+        color: #333;
+        font-weight: bold;
+    }
+
+    .progress-step {
+        font-size: 12px;
+        color: #999;
+        margin-top: 3px;
+    }
+
+    .success-title {
+        text-align: center;
+        font-size: 20px;
+        font-weight: 900;
+        font-family: 'Arial Black', Arial, sans-serif;
+        color: var(--purple);
+        margin-bottom: 6px;
+        letter-spacing: -0.5px;
+    }
+
+    .success-sub {
+        text-align: center;
+        font-size: 13px;
+        color: #888;
+        margin-bottom: 20px;
+    }
+
+    .field-block {
+        background: var(--purple-light);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 12px;
+        border: 1px solid #e5d0ea;
+    }
+
+    .field-label {
+        font-size: 11px;
+        color: var(--purple);
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        margin-bottom: 6px;
+        font-weight: bold;
+    }
+
+    .field-value {
+        font-family: Consolas, Monaco, monospace;
+        font-size: 13px;
+        color: #1a1a1a;
+        word-break: break-all;
+        line-height: 1.5;
+    }
+
+    .field-with-copy {
+        display: flex;
+        align-items: stretch;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .field-with-copy .field-block {
+        flex: 1;
+        margin-bottom: 0;
+        min-width: 0;
+    }
+
+    .copy-btn {
+        width: 52px;
+        flex-shrink: 0;
+        background: var(--purple);
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s, transform 0.1s;
+        padding: 0;
+        margin-bottom: 0;
+        color: white;
+    }
+
+    .copy-btn:active {
+        background: var(--purple-dark);
+        transform: scale(0.96);
+    }
+
+    .copy-btn svg {
+        width: 22px;
+        height: 22px;
+        fill: none;
+        stroke: white;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    button {
+        width: 100%;
+        padding: 15px;
+        border: none;
+        border-radius: 10px;
+        font-size: 15px;
+        font-weight: bold;
+        font-family: Arial, sans-serif;
+        cursor: pointer;
+        transition: transform 0.1s, background 0.15s, opacity 0.15s;
+        margin-bottom: 10px;
+        letter-spacing: 0.2px;
+    }
+
+    button:active { transform: scale(0.98); }
+
+    .btn-primary { background: var(--purple); color: var(--white); }
+    .btn-primary:active { background: var(--purple-dark); }
+
+    .btn-primary:disabled {
+        background: #cdb5d3;
+        cursor: not-allowed;
+        opacity: 0.7;
+    }
+
+    .btn-secondary {
+        background: #f0e8f2;
+        color: var(--purple);
+        border: 1px solid #e5d0ea;
+    }
+    .btn-secondary:active { background: #e5d0ea; }
+
+    .error-title {
+        text-align: center;
+        font-size: 18px;
+        font-weight: 900;
+        font-family: 'Arial Black', Arial, sans-serif;
+        color: #c0392b;
+        margin-bottom: 8px;
+    }
+
+    .error-details {
+        background: #fdf2f2;
+        border: 1px solid #f5d0d0;
+        border-radius: 10px;
+        padding: 12px;
+        font-size: 13px;
+        color: #7a2929;
+        margin: 16px 0;
+        line-height: 1.5;
+        word-break: break-word;
+    }
+
+    .steps {
+        counter-reset: step;
+        list-style: none;
+        padding: 0;
+        margin: 8px 0 0;
+    }
+
+    .steps li {
+        counter-increment: step;
+        padding: 10px 0 10px 40px;
+        position: relative;
+        font-size: 14px;
+        color: #444;
+        line-height: 1.5;
+        border-bottom: 1px solid #f4e8f7;
+    }
+
+    .steps li:last-child { border-bottom: none; }
+
+    .steps li::before {
+        content: counter(step);
+        position: absolute;
+        left: 0;
+        top: 10px;
+        width: 26px;
+        height: 26px;
+        background: var(--purple);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: bold;
+        font-family: 'Arial Black', Arial, sans-serif;
+    }
+
+    .communities-list {
+        margin: 12px 0;
+    }
+
+    .community-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        background: #f7f8fa;
+        border-radius: 10px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: background 0.15s;
+        border: 1px solid #e8eaed;
+    }
+
+    .community-item:active {
+        background: #e5d0ea;
+    }
+
+    .community-photo {
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+        flex-shrink: 0;
+        object-fit: cover;
+        background: #e5d0ea;
+    }
+
+    .community-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .community-name {
+        font-size: 14px;
+        font-weight: bold;
+        color: #1a1a1a;
+        margin-bottom: 3px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .community-id {
+        font-size: 12px;
+        color: #888;
+        font-family: Consolas, Monaco, monospace;
+    }
+
+    .no-communities {
+        text-align: center;
+        padding: 20px 0;
+    }
+
+    .no-communities p {
+        margin: 8px 0;
+        color: #666;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    .checklist-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px;
+        background: #f7f8fa;
+        border-radius: 10px;
+        border: 1px solid #e8eaed;
+        margin-bottom: 12px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .checklist-item:active {
+        background: #ede4f1;
+    }
+
+    .checklist-item.checked {
+        background: var(--purple-light);
+        border-color: #d9b8e0;
+    }
+
+    .checklist-checkbox {
+        width: 24px;
+        height: 24px;
+        border: 2px solid #c5c8cc;
+        border-radius: 6px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+        margin-top: 1px;
+    }
+
+    .checklist-item.checked .checklist-checkbox {
+        background: var(--purple);
+        border-color: var(--purple);
+    }
+
+    .checklist-checkbox::after {
+        content: '✓';
+        color: white;
+        font-weight: bold;
+        font-size: 16px;
+        display: none;
+    }
+
+    .checklist-item.checked .checklist-checkbox::after {
+        display: block;
+    }
+
+    .checklist-text {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .checklist-label {
+        font-size: 14px;
+        font-weight: bold;
+        color: #1a1a1a;
+        line-height: 1.4;
+        margin-bottom: 4px;
+    }
+
+    .checklist-hint {
+        font-size: 12px;
+        color: #888;
+        line-height: 1.4;
+    }
+
+    .instruction-block {
+        margin: 16px 0;
+        padding: 16px;
+        background: #f7f8fa;
+        border-radius: 10px;
+        border: 1px solid #e8eaed;
+    }
+
+    .instruction-block .instr-title {
+        margin: 0 0 10px;
+        font-weight: bold;
+        font-size: 14px;
+        color: #333;
+    }
+
+    .instruction-block ol {
+        margin: 0;
+        padding-left: 20px;
+        font-size: 14px;
+        line-height: 1.8;
+        color: #444;
+    }
+
+    .instruction-block ol li {
+        margin-bottom: 8px;
+    }
+
+    .footer {
+        text-align: center;
+        padding: 16px;
+        font-size: 11px;
+        color: #aaa;
+    }
+
+    .hidden { display: none !important; }
+
+    .toast {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(120px);
+        background: #333;
+        color: white;
+        padding: 12px 22px;
+        border-radius: 24px;
+        font-size: 14px;
+        font-weight: bold;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        transition: transform 0.3s ease;
+        z-index: 1000;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+
+    .toast.show {
+        transform: translateX(-50%) translateY(0);
+    }
+</style>
+</head>
+<body>
+
+<div class="phone">
+
+    <div class="header">
+        <img src="logo.png" alt="ArtWat" class="logo-img">
+        <div class="subtitle">Активация умного автополива</div>
+    </div>
+
+    <div class="container">
+
+        <!-- ЭКРАН 1: ПРИВЕТСТВИЕ -->
+        <div id="screen-welcome">
+            <div class="card">
+                <h2>Добро пожаловать!</h2>
+                <p>Это приложение поможет привязать ваш умный автополив ArtWat к сообществу ВКонтакте.</p>
+                <p>Вам нужно создать новое или выбрать существующее сообщество, где вы администратор — в нём будет работать бот управления. Для создания нового сообщества перейдите в раздел <b>«Сообщества»</b>, найдите кнопку <b>СОЗДАТЬ</b>, настройте его и возвращайтесь сюда чтобы начать активацию!</p>
+                <button class="btn-primary" style="margin-top: 16px;" onclick="startSetup()">НАЧАТЬ НАСТРОЙКУ</button>
             </div>
-        `;
-        item.onclick = () => selectCommunity(c.id);
-        listEl.appendChild(item);
-    });
-
-    showScreen('communities');
-}
-
-function showNoCommunities() {
-    $('communities-title').textContent = 'НЕТ СООБЩЕСТВ';
-    $('communities-sub').textContent   = 'Где вы администратор';
-
-    const listEl = $('communities-list');
-    listEl.innerHTML = `
-        <div class="no-communities">
-            <p>У вас нет сообществ, где вы администратор.</p>
-            <p>Создайте сообщество в VK и вернитесь сюда.</p>
-            <button class="btn-primary" onclick="openCreateGroup()">СОЗДАТЬ СООБЩЕСТВО В VK</button>
         </div>
-    `;
-
-    showScreen('communities');
-}
 
-function openCreateGroup() {
-    const url = 'https://vk.com/groups?w=groups_create';
-    if (typeof vkBridge !== 'undefined') {
-        vkBridge.send('VKWebAppOpenLink', { url })
-            .catch(() => { window.open(url, '_blank'); });
-    } else {
-        window.open(url, '_blank');
-    }
-}
-
-// ─── ВЫБОР СООБЩЕСТВА ──────────────────────────────────────
-
-async function selectCommunity(groupId) {
-    state.selectedGroupId = groupId;
-
-    showScreen('loading');
-    setProgress('Получение токена бота...', 4, 5);
-
-    try {
-        state.communityToken = await getCommunityToken(groupId, state.userToken);
-        console.log('✅ Токен сообщества получен');
-
-        showChecklist();
-
-    } catch (err) {
-        console.error('❌ Ошибка:', err);
-        showError(err.message || JSON.stringify(err));
-    }
-}
-
-// ─── ЧЕКЛИСТ ───────────────────────────────────────────────
-
-function showChecklist() {
-    const group = state.communities.find(c => c.id === state.selectedGroupId);
-    const groupName = group ? group.name : 'сообщество';
-
-    $('checklist-group-name').textContent = groupName;
-
-    const url = 'https://vk.ru/club' + state.selectedGroupId + '/settings/bots';
-    $('settings-url').textContent = url;
-    state.settingsUrl = url;
-
-    state.checklistDone = false;
-    const item = $('checklist-bots');
-    if (item) item.classList.remove('checked');
-    const btn = $('btn-continue');
-    if (btn) btn.disabled = true;
-
-    showScreen('checklist');
-}
-
-function toggleChecklist() {
-    state.checklistDone = !state.checklistDone;
-
-    const item = $('checklist-bots');
-    const btn  = $('btn-continue');
-
-    if (state.checklistDone) {
-        item.classList.add('checked');
-        btn.disabled = false;
-    } else {
-        item.classList.remove('checked');
-        btn.disabled = true;
-    }
-}
-
-// ─── КОПИРОВАНИЕ ССЫЛКИ ────────────────────────────────────
-
-function copySettingsUrl() {
-    if (!state.settingsUrl) return;
-
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(state.settingsUrl)
-            .then(() => showToast('Ссылка скопирована'))
-            .catch(() => fallbackCopy(state.settingsUrl));
-    } else {
-        fallbackCopy(state.settingsUrl);
-    }
-}
-
-// ─── ФИНАЛИЗАЦИЯ ───────────────────────────────────────────
-
-async function finalizeSetup() {
-    if (!state.checklistDone) {
-        showToast('Сначала отметьте галочку');
-        return;
-    }
-
-    showScreen('loading');
-    setProgress('Настройка Long Poll...', 5, 5);
-
-    try {
-        await configureCommunity(state.selectedGroupId, state.communityToken);
-        await requestMessagesPermission(state.selectedGroupId);
-        await verifyLongPollSettings(state.selectedGroupId, state.communityToken);
-
-        showResult();
-
-    } catch (err) {
-        console.error('❌ Ошибка:', err);
-        showError(err.message || JSON.stringify(err));
-    }
-}
-
-// ─── ШАГ 4: ТОКЕН СООБЩЕСТВА ───────────────────────────────
-
-async function getCommunityToken(groupId, userToken) {
-    try {
-        console.log('📤 Запрашиваю VKWebAppGetCommunityToken...');
-
-        const data = await vkBridge.send('VKWebAppGetCommunityToken', {
-            app_id:   APP_ID,
-            group_id: groupId,
-            scope:    COMMUNITY_SCOPE
-        });
-
-        console.log('📥 Ответ VKWebAppGetCommunityToken:', JSON.stringify(data));
-
-        if (data && data.access_token) {
-            console.log('✅ Токен получен через VKWebAppGetCommunityToken');
-            return data.access_token;
-        }
-    } catch (e) {
-        console.warn('⚠️ VKWebAppGetCommunityToken не сработал:', e);
-    }
-
-    try {
-        console.log('📤 Пробую groups.getToken...');
-
-        const data = await vkBridge.send('VKWebAppCallAPIMethod', {
-            method: 'groups.getToken',
-            params: {
-                group_id:     groupId,
-                v:            '5.199',
-                access_token: userToken
-            }
-        });
-
-        console.log('📥 Ответ groups.getToken:', JSON.stringify(data));
-
-        if (data && data.response && data.response.token) {
-            console.log('✅ Токен получен через groups.getToken');
-            return data.response.token;
-        }
-
-        if (data && data.error) {
-            console.warn('⚠️ groups.getToken вернул ошибку:', data.error);
-        }
-    } catch (e) {
-        console.warn('⚠️ groups.getToken не сработал:', e);
-    }
-
-    throw new Error(
-        'Не удалось автоматически получить токен сообщества.\n\n' +
-        'Откройте сообщество в VK вручную: Управление → Работа с API → ' +
-        'Создать ключ доступа. Выберите права: управление сообществом, сообщения, фотографии, документы.'
-    );
-}
-
-// ─── ШАГ 5: LONG POLL ──────────────────────────────────────
-
-async function configureCommunity(groupId, communityToken) {
-    console.log('📤 Включаю Long Poll API для сообщества', groupId);
-
-    try {
-        const result = await vkBridge.send('VKWebAppCallAPIMethod', {
-            method: 'groups.setLongPollSettings',
-            params: {
-                group_id:      groupId,
-                enabled:       1,
-                message_new:   1,
-                message_reply: 1,
-                message_allow: 1,
-                message_edit:  1,
-                v:             '5.199',
-                access_token:  communityToken
-            }
-        });
-
-        console.log('📥 Ответ groups.setLongPollSettings:', JSON.stringify(result));
-
-        if (result && result.response === 1) {
-            console.log('✅ Long Poll API успешно включён');
-            state.longPollEnabled = true;
-            return true;
-        }
-
-        if (result && result.error) {
-            console.warn('⚠️ Ошибка setLongPollSettings:', result.error);
-        }
-
-    } catch (e) {
-        console.warn('⚠️ VK Bridge выбросил ошибку при setLongPollSettings:', e);
-    }
-
-    return false;
-}
-
-// ─── РАЗРЕШЕНИЕ НА СООБЩЕНИЯ ───────────────────────────────
-
-async function requestMessagesPermission(groupId) {
-    console.log('📤 Запрашиваю разрешение на сообщения от сообщества...');
-
-    try {
-        const data = await vkBridge.send('VKWebAppAllowMessagesFromGroup', {
-            group_id: groupId
-        });
-
-        console.log('📥 Ответ VKWebAppAllowMessagesFromGroup:', JSON.stringify(data));
-
-        if (data && data.result) {
-            console.log('✅ Пользователь разрешил сообщения от сообщества');
-            state.messagesAllowed = true;
-            return true;
-        }
-
-    } catch (e) {
-        console.warn('⚠️ VKWebAppAllowMessagesFromGroup не сработал:', e);
-    }
-
-    return false;
-}
-
-// ─── ПРОВЕРКА LONG POLL ────────────────────────────────────
-
-async function verifyLongPollSettings(groupId, communityToken) {
-    console.log('📤 Проверяю настройки Long Poll...');
-
-    try {
-        const result = await vkBridge.send('VKWebAppCallAPIMethod', {
-            method: 'groups.getLongPollSettings',
-            params: {
-                group_id:     groupId,
-                v:            '5.199',
-                access_token: communityToken
-            }
-        });
-
-        console.log('📥 Ответ groups.getLongPollSettings:', JSON.stringify(result));
-
-        if (result && result.response) {
-            const r = result.response;
-
-            if (r.is_enabled) {
-                console.log('✅ Long Poll включён');
-                state.longPollEnabled = true;
-            } else {
-                console.warn('⚠️ Long Poll НЕ включён');
-                state.longPollEnabled = false;
-            }
-
-            const ev = r.events || {};
-            if (ev.message_new)   console.log('✅ message_new включено');
-            else                  console.warn('⚠️ message_new НЕ включено');
-
-            if (ev.message_reply) console.log('✅ message_reply включено');
-            if (ev.message_edit)  console.log('✅ message_edit включено');
-            if (ev.message_allow) console.log('✅ message_allow включено');
-        }
-
-    } catch (e) {
-        console.warn('⚠️ Не удалось проверить настройки:', e);
-    }
-}
-
-// ─── СКАЧИВАНИЕ АВАТАРКИ ───────────────────────────────────
-// Автоматически загрузить аватарку на VK нельзя из-за CORS —
-// файловый сервер VK (pu.vk.ru) не отдаёт заголовки Access-Control-Allow-Origin.
-// Поэтому даём пользователю скачать картинку и поставить её вручную.
-
-function downloadAvatar() {
-    const link = document.createElement('a');
-    link.href = AVATAR_URL;
-    link.download = 'artwat_avatar.png';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    showToast('Аватарка скачана');
-}
-
-// ─── ПОКАЗ РЕЗУЛЬТАТА ──────────────────────────────────────
-
-function showResult() {
-    $('result-group-id').textContent = state.selectedGroupId;
-    $('result-token').textContent    = state.communityToken;
-
-    const sub = $('success-subtitle');
-    if (sub) {
-        sub.textContent = 'Ваш бот привязан и готов к работе';
-    }
-
-    showScreen('success');
-}
-
-// ─── КОПИРОВАНИЕ ────────────────────────────────────────────
-
-function copyField(field) {
-    let value = '';
-    let label = '';
-
-    if (field === 'group') {
-        value = String(state.selectedGroupId);
-        label = 'Group ID';
-    } else if (field === 'token') {
-        value = state.communityToken;
-        label = 'Token';
-    }
-
-    if (!value) return;
-
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(value)
-            .then(() => showToast(label + ' скопирован'))
-            .catch(() => {
-                fallbackCopy(value);
-                showToast(label + ' скопирован');
-            });
-    } else {
-        fallbackCopy(value);
-        showToast(label + ' скопирован');
-    }
-}
-
-function copyAll() {
-    const text = `Group ID: ${state.selectedGroupId}\nToken: ${state.communityToken}`;
-
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text)
-            .then(() => showToast('Скопировано'))
-            .catch(() => fallbackCopy(text));
-    } else {
-        fallbackCopy(text);
-    }
-}
-
-function fallbackCopy(text) {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    try {
-        document.execCommand('copy');
-    } catch (e) {
-        // silent
-    }
-    document.body.removeChild(ta);
-}
-
-// ─── ПОВТОР ─────────────────────────────────────────────────
-
-function retry() {
-    state.userToken       = null;
-    state.communities     = [];
-    state.selectedGroupId = null;
-    state.communityToken  = null;
-    state.longPollEnabled = false;
-    state.messagesAllowed = false;
-    state.checklistDone   = false;
-    state.settingsUrl     = '';
-
-    showScreen('welcome');
-    $('help-block').classList.add('hidden');
-}
-
-// ─── ПЕРЕВОД ОШИБОК VK ─────────────────────────────────────
-
-function translateVkError(error) {
-    const code = error.error_code;
-    const msg  = error.error_msg || 'Неизвестная ошибка';
-
-    const map = {
-        5:   'Авторизация не удалась. Попробуйте снова и разрешите доступ.',
-        6:   'Слишком много запросов. Подождите немного и попробуйте снова.',
-        14:  'Требуется ввод капчи. Откройте VK в браузере и попробуйте снова.',
-        15:  'Доступ запрещён. Убедитесь, что вы разрешили управление сообществами.',
-        100: 'Один из параметров указан неверно.',
-        200: 'Доступ к сообществу запрещён.',
-        203: 'Вы не являетесь администратором этого сообщества.',
-        260: 'Не удалось создать сообщество. Возможно, достигнут лимит.',
-        262: 'VK временно ограничил создание сообществ. Попробуйте позже.'
-    };
-
-    return map[code] ? `${map[code]} (код ${code})` : `${msg} (код ${code})`;
-}
-
-// ─── ЗАПУСК ─────────────────────────────────────────────────
-
-window.addEventListener('load', () => {
-    if (typeof vkBridge === 'undefined') {
-        showError('VK Bridge не загрузился. Проверьте интернет-соединение и откройте приложение заново.');
-        return;
-    }
-
-    console.log('🌱 ArtWat Setup загружен, APP_ID =', APP_ID);
-
-    vkReadyPromise = vkBridge.send('VKWebAppInit')
-        .then(() => {
-            console.log('✅ VK Bridge инициализирован');
-        })
-        .catch((err) => {
-            console.error('❌ VKWebAppInit упал:', err);
-        });
-});
+        <!-- ЭКРАН 2: ЗАГРУЗКА -->
+        <div id="screen-loading" class="hidden">
+            <div class="progress">
+                <div class="spinner"></div>
+                <div>
+                    <div class="progress-text" id="progress-text">Инициализация...</div>
+                    <div class="progress-step" id="progress-step">Шаг 1 из 5</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ЭКРАН 3: ВЫБОР СООБЩЕСТВА -->
+        <div id="screen-communities" class="hidden">
+            <div class="card">
+                <div class="success-title" id="communities-title">ВЫБЕРИТЕ СООБЩЕСТВО</div>
+                <div class="success-sub" id="communities-sub">В котором вы администратор</div>
+
+                <div id="communities-list" class="communities-list"></div>
+
+                <button class="btn-secondary" onclick="retry()" style="margin-top: 16px;">НАЗАД</button>
+            </div>
+        </div>
+
+        <!-- ЭКРАН 4: ЧЕКЛИСТ -->
+        <div id="screen-checklist" class="hidden">
+            <div class="card">
+                <div class="success-title">ВКЛЮЧИТЕ БОТА</div>
+                <div class="success-sub">
+                    В сообществе «<span id="checklist-group-name">—</span>»
+                </div>
+
+                <p style="text-align: center; font-size: 14px; color: #555; margin: 12px 0 16px;">
+                    Нужно включить одну настройку, чтобы кнопки бота работали.
+                </p>
+
+                <div class="instruction-block">
+                    <p class="instr-title">Как включить:</p>
+                    <ol>
+                        <li>Перейдите или откройте ссылку ниже <b>в любом браузере</b>, и возле пункта <b>«Возможности ботов»</b> поставьте значение <b>ВКЛЮЧЕНЫ</b>.</li>
+                        <li>Вернитесь на данную страницу и поставьте галочку ниже, чтобы кнопка <b>ПРОДОЛЖИТЬ</b> разблокировалась.</li>
+                    </ol>
+                </div>
+
+                <div class="field-block">
+                    <div class="field-label">Ссылка на настройки бота</div>
+                    <div class="field-value" id="settings-url">—</div>
+                </div>
+
+                <button class="btn-secondary" onclick="copySettingsUrl()">
+                    СКОПИРОВАТЬ ССЫЛКУ
+                </button>
+
+                <div class="checklist-item" id="checklist-bots" onclick="toggleChecklist()" style="margin-top: 16px;">
+                    <div class="checklist-checkbox"></div>
+                    <div class="checklist-text">
+                        <div class="checklist-label">Возможности ботов включены</div>
+                        <div class="checklist-hint">
+                            Отметьте, когда включите настройку в браузере
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn-primary" id="btn-continue" disabled onclick="finalizeSetup()">
+                    ПРОДОЛЖИТЬ
+                </button>
+
+                <button class="btn-secondary" onclick="retry()" style="margin-top: 6px;">
+                    НАЗАД К ВЫБОРУ СООБЩЕСТВА
+                </button>
+            </div>
+        </div>
+
+        <!-- ЭКРАН 5: УСПЕХ -->
+        <div id="screen-success" class="hidden">
+            <div class="card">
+                <div class="success-title">ГОТОВО!</div>
+                <div class="success-sub" id="success-subtitle">Ваш бот привязан и готов к работе</div>
+
+                <div class="field-with-copy">
+                    <div class="field-block">
+                        <div class="field-label">Group ID</div>
+                        <div class="field-value" id="result-group-id">—</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyField('group')" title="Скопировать Group ID">
+                        <svg viewBox="0 0 24 24">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="field-with-copy">
+                    <div class="field-block">
+                        <div class="field-label">Access Token</div>
+                        <div class="field-value" id="result-token">—</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyField('token')" title="Скопировать Access Token">
+                        <svg viewBox="0 0 24 24">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <button class="btn-primary" onclick="copyAll()" style="margin-top: 12px;">СКОПИРОВАТЬ ВСЁ</button>
+            </div>
+
+            <div class="card">
+                <h2>Обновить аватарку</h2>
+                <p>Скачайте готовую аватарку ArtWat и установите её в настройках сообщества, чтобы оно выглядело фирменно.</p>
+                <button class="btn-secondary" onclick="downloadAvatar()" style="margin-top: 12px;">
+                    СКАЧАТЬ АВАТАРКУ
+                </button>
+            </div>
+
+            <div class="card">
+                <h2>Что делать дальше</h2>
+                <ol class="steps">
+                    <li>Нажмите «Скопировать всё» выше</li>
+                    <li>Включите устройство и подключитесь к Wi-Fi сети <b>ArtWAT_system</b></li>
+                    <li>Если страница не открылась — откройте браузер и перейдите по адресу <b>http://192.168.4.1</b></li>
+                    <li>Вставьте скопированные данные в поля формы</li>
+                    <li>Сохраните настройки — устройство перезагрузится и подключится к VK</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- ЭКРАН 6: ОШИБКА -->
+        <div id="screen-error" class="hidden">
+            <div class="card">
+                <div class="error-title">НЕ УДАЛОСЬ ЗАВЕРШИТЬ НАСТРОЙКУ</div>
+                <div class="error-details" id="error-details">—</div>
+                <button class="btn-primary" onclick="retry()">ПОПРОБОВАТЬ СНОВА</button>
+                <button class="btn-secondary" onclick="toggleHelp()">ЧТО ДЕЛАТЬ?</button>
+            </div>
+
+            <div id="help-block" class="card hidden">
+                <h2>Возможные причины</h2>
+                <p><b>1.</b> Вы не дали разрешение на управление сообществами — попробуйте снова и нажмите «Разрешить».</p>
+                <p><b>2.</b> У вас нет сообществ, где вы администратор — создайте сообщество в VK.</p>
+                <p><b>3.</b> Временная ошибка VK — подождите пару минут и повторите.</p>
+                <p><b>4.</b> Проблема с интернетом — проверьте подключение.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="footer">ArtWat © 2025 · Управление автополивом через VK</div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+<script src="script.js"></script>
+
+</body>
+</html>
