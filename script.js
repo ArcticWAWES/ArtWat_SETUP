@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
 //  ArtWat Setup — VK Mini App
-//  Путь B: выбор сообщества + автонастройка Long Poll + проверка ботов
+//  Путь B + чеклист настройки сообщества
 // ═══════════════════════════════════════════════════════════
 
 // ─── КОНФИГУРАЦИЯ ───────────────────────────────────────────
@@ -17,7 +17,7 @@ const state = {
     communityToken:  null,
     longPollEnabled: false,
     messagesAllowed: false,
-    botsEnabled:     false
+    checklistDone:   false
 };
 
 let vkReadyPromise = null;
@@ -27,7 +27,7 @@ let vkReadyPromise = null;
 const $ = (id) => document.getElementById(id);
 
 function showScreen(name) {
-    ['welcome', 'loading', 'communities', 'bots-off', 'success', 'error'].forEach(s => {
+    ['welcome', 'loading', 'communities', 'checklist', 'success', 'error'].forEach(s => {
         const el = $('screen-' + s);
         if (el) el.classList.toggle('hidden', s !== name);
     });
@@ -72,12 +72,10 @@ async function startSetup() {
     try {
         if (vkReadyPromise) await vkReadyPromise;
 
-        // Шаг 2: получаем пользовательский токен
         setProgress('Запрос разрешений...', 2, 5);
         state.userToken = await getUserToken();
         console.log('✅ Токен пользователя получен');
 
-        // Шаг 3: получаем список сообществ
         setProgress('Загрузка сообществ...', 3, 5);
         state.communities = await getAdminCommunities(state.userToken);
         console.log('✅ Загружено сообществ:', state.communities.length);
@@ -208,9 +206,8 @@ function openCreateGroup() {
 
 // ─── ВЫБОР СООБЩЕСТВА ──────────────────────────────────────
 // 1. Получаем токен сообщества
-// 2. Проверяем bots_capabilities (Возможности ботов)
-// 3. Если выключено — показываем экран-инструкцию
-// 4. Если включено — настраиваем Long Poll и разрешения
+// 2. Показываем чеклист (пользователь подтверждает, что включил ботов)
+// 3. finalizeSetup() настраивает Long Poll и разрешения
 
 async function selectCommunity(groupId) {
     state.selectedGroupId = groupId;
@@ -219,24 +216,10 @@ async function selectCommunity(groupId) {
     setProgress('Получение токена бота...', 4, 5);
 
     try {
-        // Получаем токен сообщества
         state.communityToken = await getCommunityToken(groupId, state.userToken);
         console.log('✅ Токен сообщества получен');
 
-        // Проверяем, включены ли возможности ботов
-        setProgress('Проверка настроек...', 5, 5);
-        state.botsEnabled = await checkBotsCapability(groupId, state.communityToken);
-
-        if (!state.botsEnabled) {
-            console.log('⚠️ Возможности ботов выключены — показываю инструкцию');
-            const group = state.communities.find(c => c.id === groupId);
-            $('bots-off-group-name').textContent = group ? group.name : 'сообщество';
-            showScreen('bots-off');
-            return;
-        }
-
-        // Всё включено — доводим настройку до конца
-        await finalizeSetup();
+        showChecklist();
 
     } catch (err) {
         console.error('❌ Ошибка:', err);
@@ -244,43 +227,36 @@ async function selectCommunity(groupId) {
     }
 }
 
-// ─── ПРОВЕРКА "ВОЗМОЖНОСТЕЙ БОТОВ" ─────────────────────────
-// groups.getSettings возвращает bots_capabilities: 1 если включено, 0 если выключено
+// ─── ЧЕКЛИСТ ───────────────────────────────────────────────
 
-async function checkBotsCapability(groupId, communityToken) {
-    console.log('📤 Проверяю bots_capabilities для', groupId);
+function showChecklist() {
+    const group = state.communities.find(c => c.id === state.selectedGroupId);
+    $('checklist-group-name').textContent = group ? group.name : 'сообщество';
 
-    try {
-        const result = await vkBridge.send('VKWebAppCallAPIMethod', {
-            method: 'groups.getSettings',
-            params: {
-                group_id:     groupId,
-                v:            '5.199',
-                access_token: communityToken
-            }
-        });
+    // Сброс состояния
+    state.checklistDone = false;
+    const item = $('checklist-bots');
+    if (item) item.classList.remove('checked');
+    const btn = $('btn-continue');
+    if (btn) btn.disabled = true;
 
-        console.log('📥 Ответ groups.getSettings:', JSON.stringify(result));
-
-        if (result && result.response) {
-            const enabled = result.response.bots_capabilities === 1;
-            console.log('🔍 bots_capabilities:', enabled ? 'ВКЛЮЧЕНО' : 'ВЫКЛЮЧЕНО');
-            return enabled;
-        }
-
-        if (result && result.error) {
-            console.warn('⚠️ groups.getSettings вернул ошибку:', result.error);
-        }
-
-    } catch (e) {
-        console.warn('⚠️ Не удалось проверить bots_capabilities:', e);
-    }
-
-    // Если не смогли проверить — считаем, что включено (не блокируем пользователя)
-    return true;
+    showScreen('checklist');
 }
 
-// ─── КНОПКА "ОТКРЫТЬ НАСТРОЙКИ СООБЩЕСТВА" ─────────────────
+function toggleChecklist() {
+    state.checklistDone = !state.checklistDone;
+
+    const item = $('checklist-bots');
+    const btn  = $('btn-continue');
+
+    if (state.checklistDone) {
+        item.classList.add('checked');
+        btn.disabled = false;
+    } else {
+        item.classList.remove('checked');
+        btn.disabled = true;
+    }
+}
 
 function openGroupSettings() {
     if (!state.selectedGroupId) return;
@@ -296,39 +272,33 @@ function openGroupSettings() {
     }
 }
 
-// ─── КНОПКА "Я ВКЛЮЧИЛ, ПРОВЕРИТЬ СНОВА" ───────────────────
-
-async function checkBotsCapabilityAndProceed() {
-    showScreen('loading');
-    setProgress('Проверка настроек...', 5, 5);
-
-    state.botsEnabled = await checkBotsCapability(state.selectedGroupId, state.communityToken);
-
-    if (state.botsEnabled) {
-        await finalizeSetup();
-    } else {
-        console.log('⚠️ Возможности ботов всё ещё выключены');
-        showToast('Возможности ботов не включены');
-        showScreen('bots-off');
-    }
-}
-
 // ─── ФИНАЛИЗАЦИЯ НАСТРОЙКИ ─────────────────────────────────
 
 async function finalizeSetup() {
+    if (!state.checklistDone) {
+        showToast('Сначала отметьте галочку');
+        return;
+    }
+
+    showScreen('loading');
     setProgress('Настройка Long Poll...', 5, 5);
 
-    await configureCommunity(state.selectedGroupId, state.communityToken);
-    await requestMessagesPermission(state.selectedGroupId);
-    await verifyLongPollSettings(state.selectedGroupId, state.communityToken);
+    try {
+        await configureCommunity(state.selectedGroupId, state.communityToken);
+        await requestMessagesPermission(state.selectedGroupId);
+        await verifyLongPollSettings(state.selectedGroupId, state.communityToken);
 
-    showResult();
+        showResult();
+
+    } catch (err) {
+        console.error('❌ Ошибка:', err);
+        showError(err.message || JSON.stringify(err));
+    }
 }
 
 // ─── ШАГ 4: ТОКЕН СООБЩЕСТВА ───────────────────────────────
 
 async function getCommunityToken(groupId, userToken) {
-    // Способ 1: VKWebAppGetCommunityToken
     try {
         console.log('📤 Запрашиваю VKWebAppGetCommunityToken...');
 
@@ -348,7 +318,6 @@ async function getCommunityToken(groupId, userToken) {
         console.warn('⚠️ VKWebAppGetCommunityToken не сработал:', e);
     }
 
-    // Способ 2: groups.getToken
     try {
         console.log('📤 Пробую groups.getToken...');
 
@@ -466,6 +435,7 @@ async function verifyLongPollSettings(groupId, communityToken) {
         if (result && result.response) {
             const r = result.response;
 
+            // is_enabled — верхний уровень
             if (r.is_enabled) {
                 console.log('✅ Long Poll включён');
                 state.longPollEnabled = true;
@@ -474,11 +444,14 @@ async function verifyLongPollSettings(groupId, communityToken) {
                 state.longPollEnabled = false;
             }
 
-            if (r.message_new) {
-                console.log('✅ Событие message_new включено');
-            } else {
-                console.warn('⚠️ message_new НЕ включено');
-            }
+            // События — вложены в r.events
+            const ev = r.events || {};
+            if (ev.message_new)   console.log('✅ message_new включено');
+            else                  console.warn('⚠️ message_new НЕ включено');
+
+            if (ev.message_reply) console.log('✅ message_reply включено');
+            if (ev.message_edit)  console.log('✅ message_edit включено');
+            if (ev.message_allow) console.log('✅ message_allow включено');
         }
 
     } catch (e) {
@@ -494,13 +467,7 @@ function showResult() {
 
     const sub = $('success-subtitle');
     if (sub) {
-        if (state.longPollEnabled && state.botsEnabled) {
-            sub.textContent = 'Ваш бот привязан и готов к работе';
-        } else if (state.botsEnabled) {
-            sub.textContent = 'Бот привязан. Long Poll нужно включить вручную.';
-        } else {
-            sub.textContent = 'Бот привязан, но требуются дополнительные настройки.';
-        }
+        sub.textContent = 'Ваш бот привязан и готов к работе';
     }
 
     showScreen('success');
@@ -560,7 +527,7 @@ function retry() {
     state.communityToken  = null;
     state.longPollEnabled = false;
     state.messagesAllowed = false;
-    state.botsEnabled     = false;
+    state.checklistDone   = false;
 
     showScreen('welcome');
     $('help-block').classList.add('hidden');
