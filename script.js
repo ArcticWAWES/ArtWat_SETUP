@@ -1,13 +1,17 @@
 // ═══════════════════════════════════════════════════════════
 //  ArtWat Setup — VK Mini App
-//  Путь B + чеклист + отдельные кнопки копирования
+//  Путь B + чеклист + авто-смена аватарки из файла
 // ═══════════════════════════════════════════════════════════
 
 // ─── КОНФИГУРАЦИЯ ───────────────────────────────────────────
 const APP_ID = 54818456;
 
-const USER_SCOPE      = 'groups';
+const USER_SCOPE      = 'groups,photos';
 const COMMUNITY_SCOPE = 'manage,messages,photos,docs';
+
+// Путь к аватарке, которая лежит рядом с index.html
+// (тот же origin — CORS не мешает)
+const AVATAR_URL = 'avatar.png';
 
 // ─── СОСТОЯНИЕ ──────────────────────────────────────────────
 const state = {
@@ -291,6 +295,10 @@ async function finalizeSetup() {
         await requestMessagesPermission(state.selectedGroupId);
         await verifyLongPollSettings(state.selectedGroupId, state.communityToken);
 
+        // 🆕 Обновляем аватарку сообщества (мягкая операция — не блокирует процесс)
+        setProgress('Обновление аватарки...', 5, 5);
+        await setCommunityAvatar(state.selectedGroupId, state.userToken);
+
         showResult();
 
     } catch (err) {
@@ -457,6 +465,90 @@ async function verifyLongPollSettings(groupId, communityToken) {
 
     } catch (e) {
         console.warn('⚠️ Не удалось проверить настройки:', e);
+    }
+}
+
+// ─── СМЕНА АВАТАРКИ СООБЩЕСТВА ─────────────────────────────
+// Скачивает avatar.png из репозитория (тот же origin — CORS не мешает)
+// и загружает его как аватарку выбранного сообщества.
+
+async function setCommunityAvatar(groupId, userToken) {
+    console.log('📤 Меняю аватарку сообщества...');
+
+    try {
+        // Шаг 1: скачиваем avatar.png как Blob
+        const fileResp = await fetch(AVATAR_URL);
+
+        if (!fileResp.ok) {
+            throw new Error('Не удалось загрузить avatar.png: HTTP ' + fileResp.status);
+        }
+
+        const blob = await fileResp.blob();
+        console.log('📦 avatar.png загружен, размер:', blob.size, 'байт');
+
+        if (blob.size === 0) {
+            throw new Error('avatar.png пустой');
+        }
+
+        // Шаг 2: получаем upload_url у VK
+        const serverResp = await vkBridge.send('VKWebAppCallAPIMethod', {
+            method: 'photos.getOwnerPhotoUploadServer',
+            params: {
+                owner_id:     -groupId,   // со знаком минус — это сообщество
+                v:            '5.199',
+                access_token: userToken
+            }
+        });
+
+        console.log('📥 Ответ getOwnerPhotoUploadServer:', JSON.stringify(serverResp));
+
+        if (!serverResp || !serverResp.response || !serverResp.response.upload_url) {
+            throw new Error('Не удалось получить upload_url');
+        }
+
+        const uploadUrl = serverResp.response.upload_url;
+
+        // Шаг 3: загружаем blob на VK
+        const formData = new FormData();
+        formData.append('photo', blob, 'avatar.png');
+
+        const uploadResp = await fetch(uploadUrl, {
+            method: 'POST',
+            body:   formData
+        });
+
+        const uploadResult = await uploadResp.json();
+        console.log('📥 Upload result:', JSON.stringify(uploadResult));
+
+        if (!uploadResult.server || !uploadResult.hash || !uploadResult.photo) {
+            throw new Error('Загрузка вернула неполные данные');
+        }
+
+        // Шаг 4: сохраняем фото как аватарку
+        const saveResp = await vkBridge.send('VKWebAppCallAPIMethod', {
+            method: 'photos.saveOwnerPhoto',
+            params: {
+                server:       uploadResult.server,
+                hash:         uploadResult.hash,
+                photo:        uploadResult.photo,
+                v:            '5.199',
+                access_token: userToken
+            }
+        });
+
+        console.log('📥 saveOwnerPhoto:', JSON.stringify(saveResp));
+
+        if (saveResp && saveResp.response) {
+            console.log('✅ Аватарка обновлена');
+            return true;
+        }
+
+        console.warn('⚠️ saveOwnerPhoto вернул неожиданный ответ');
+        return false;
+
+    } catch (e) {
+        console.warn('⚠️ Не удалось обновить аватарку (не критично):', e);
+        return false;
     }
 }
 
