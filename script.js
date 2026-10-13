@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════
-//  ArtWat Setup — VK Mini App (Путь B: выбор сообщества)
+//  ArtWat Setup — VK Mini App
+//  Путь B: выбор сообщества + автоматическая настройка Long Poll
 // ═══════════════════════════════════════════════════════════
 
 // ─── КОНФИГУРАЦИЯ ───────────────────────────────────────────
@@ -11,9 +12,11 @@ const COMMUNITY_SCOPE = 'manage,messages,photos,docs';
 // ─── СОСТОЯНИЕ ──────────────────────────────────────────────
 const state = {
     userToken:       null,
-    communities:     [],      // массив { id, name, screen_name, photo }
+    communities:     [],
     selectedGroupId: null,
-    communityToken:  null
+    communityToken:  null,
+    longPollEnabled: false,
+    messagesAllowed: false
 };
 
 let vkReadyPromise = null;
@@ -63,28 +66,26 @@ function escapeHtml(str) {
 
 async function startSetup() {
     showScreen('loading');
-    setProgress('Инициализация...', 1, 4);
+    setProgress('Инициализация...', 1, 5);
 
     try {
         if (vkReadyPromise) await vkReadyPromise;
 
         // Шаг 2: получаем пользовательский токен
-        setProgress('Запрос разрешений...', 2, 4);
+        setProgress('Запрос разрешений...', 2, 5);
         state.userToken = await getUserToken();
         console.log('✅ Токен пользователя получен');
 
-        // Шаг 3: получаем список сообществ пользователя
-        setProgress('Загрузка сообществ...', 3, 4);
+        // Шаг 3: получаем список сообществ
+        setProgress('Загрузка сообществ...', 3, 5);
         state.communities = await getAdminCommunities(state.userToken);
         console.log('✅ Загружено сообществ:', state.communities.length);
 
-        // Если сообществ нет — показываем экран с предложением создать
         if (state.communities.length === 0) {
             showNoCommunities();
             return;
         }
 
-        // Показываем список для выбора
         showCommunityList();
 
     } catch (err) {
@@ -140,7 +141,6 @@ async function getAdminCommunities(userToken) {
         throw new Error('VK вернул неожиданный ответ: ' + JSON.stringify(data));
     }
 
-    // Формат ответа: { response: { count: N, items: [ {...}, {...} ] } }
     const items = data.response.items || [];
 
     return items.map(item => ({
@@ -151,7 +151,7 @@ async function getAdminCommunities(userToken) {
     }));
 }
 
-// ─── ПОКАЗ СПИСКА СООБЩЕСТВ ────────────────────────────────
+// ─── СПИСОК СООБЩЕСТВ ──────────────────────────────────────
 
 function showCommunityList() {
     const listEl = $('communities-list');
@@ -178,8 +178,6 @@ function showCommunityList() {
 
     showScreen('communities');
 }
-
-// ─── ПОКАЗ ЭКРАНА "НЕТ СООБЩЕСТВ" ──────────────────────────
 
 function showNoCommunities() {
     $('communities-title').textContent = 'НЕТ СООБЩЕСТВ';
@@ -208,16 +206,30 @@ function openCreateGroup() {
 }
 
 // ─── ВЫБОР СООБЩЕСТВА ──────────────────────────────────────
+// 1. Получаем токен сообщества
+// 2. Включаем Long Poll API
+// 3. Запрашиваем разрешение на сообщения от сообщества
+// 4. Проверяем, что всё включилось
 
 async function selectCommunity(groupId) {
     state.selectedGroupId = groupId;
 
     showScreen('loading');
-    setProgress('Получение токена бота...', 4, 4);
 
     try {
+        // Шаг 4: получаем токен сообщества
+        setProgress('Получение токена бота...', 4, 5);
         state.communityToken = await getCommunityToken(groupId, state.userToken);
         console.log('✅ Токен сообщества получен');
+
+        // Шаг 5: настраиваем Long Poll API и разрешения
+        setProgress('Настройка сообщества...', 5, 5);
+        await configureCommunity(groupId, state.communityToken);
+        await requestMessagesPermission(groupId);
+
+        // Финальная проверка
+        await verifyLongPollSettings(groupId, state.communityToken);
+
         showResult();
     } catch (err) {
         console.error('❌ Ошибка:', err);
@@ -248,7 +260,7 @@ async function getCommunityToken(groupId, userToken) {
         console.warn('⚠️ VKWebAppGetCommunityToken не сработал:', e);
     }
 
-    // Способ 2: groups.getToken через VKWebAppCallAPIMethod
+    // Способ 2: groups.getToken
     try {
         console.log('📤 Пробую groups.getToken...');
 
@@ -282,11 +294,144 @@ async function getCommunityToken(groupId, userToken) {
     );
 }
 
+// ─── ШАГ 5: АВТОНАСТРОЙКА СООБЩЕСТВА ───────────────────────
+// Включаем Long Poll API и типы событий через groups.setLongPollSettings.
+// Это полностью заменяет ручную настройку через десктопную версию VK.
+
+async function configureCommunity(groupId, communityToken) {
+    console.log('📤 Включаю Long Poll API для сообщества', groupId);
+
+    try {
+        const result = await vkBridge.send('VKWebAppCallAPIMethod', {
+            method: 'groups.setLongPollSettings',
+            params: {
+                group_id:      groupId,
+                enabled:       1,   // Включаем Long Poll API
+                message_new:   1,   // Новые входящие сообщения
+                message_reply: 1,   // Ответы на сообщения
+                message_allow: 1,   // Разрешение на отправку сообщений
+                message_edit:  1,   // Редактирование сообщений
+                v:             '5.199',
+                access_token:  communityToken
+            }
+        });
+
+        console.log('📥 Ответ groups.setLongPollSettings:', JSON.stringify(result));
+
+        if (result && result.response === 1) {
+            console.log('✅ Long Poll API успешно включён');
+            state.longPollEnabled = true;
+            return true;
+        }
+
+        if (result && result.error) {
+            console.warn('⚠️ Ошибка setLongPollSettings:', result.error);
+
+            // Ошибка 15 (Access denied) — токен сообщества без права manage
+            if (result.error.error_code === 15) {
+                throw new Error(
+                    'Не удалось включить Long Poll API: у токена сообщества нет прав управления.\n\n' +
+                    'Откройте сообщество вручную: Управление → Работа с API → Long Poll API → Включить.'
+                );
+            }
+
+            throw new Error(translateVkError(result.error));
+        }
+
+    } catch (e) {
+        if (e.message && e.message.indexOf('Long Poll') !== -1) throw e;
+        console.warn('⚠️ VK Bridge выбросил ошибку при setLongPollSettings:', e);
+        // Не прерываем — возможно, права уже настроены
+    }
+
+    return false;
+}
+
+// ─── РАЗРЕШЕНИЕ НА СООБЩЕНИЯ ОТ СООБЩЕСТВА ────────────────
+// Показывает пользователю нативное окно VK с запросом разрешения
+// на получение сообщений от имени сообщества.
+
+async function requestMessagesPermission(groupId) {
+    console.log('📤 Запрашиваю разрешение на сообщения от сообщества...');
+
+    try {
+        const data = await vkBridge.send('VKWebAppAllowMessagesFromGroup', {
+            group_id: groupId
+        });
+
+        console.log('📥 Ответ VKWebAppAllowMessagesFromGroup:', JSON.stringify(data));
+
+        if (data && data.result) {
+            console.log('✅ Пользователь разрешил сообщения от сообщества');
+            state.messagesAllowed = true;
+            return true;
+        }
+
+    } catch (e) {
+        console.warn('⚠️ VKWebAppAllowMessagesFromGroup не сработал:', e);
+    }
+
+    return false;
+}
+
+// ─── ПРОВЕРКА НАСТРОЕК LONG POLL ───────────────────────────
+// Вызываем groups.getLongPollSettings, чтобы убедиться,
+// что всё действительно включилось.
+
+async function verifyLongPollSettings(groupId, communityToken) {
+    console.log('📤 Проверяю настройки Long Poll...');
+
+    try {
+        const result = await vkBridge.send('VKWebAppCallAPIMethod', {
+            method: 'groups.getLongPollSettings',
+            params: {
+                group_id:     groupId,
+                v:            '5.199',
+                access_token: communityToken
+            }
+        });
+
+        console.log('📥 Ответ groups.getLongPollSettings:', JSON.stringify(result));
+
+        if (result && result.response) {
+            const r = result.response;
+
+            if (r.is_enabled) {
+                console.log('✅ Long Poll включён');
+                state.longPollEnabled = true;
+            } else {
+                console.warn('⚠️ Long Poll НЕ включён');
+                state.longPollEnabled = false;
+            }
+
+            if (r.message_new) {
+                console.log('✅ Событие message_new включено');
+            } else {
+                console.warn('⚠️ message_new НЕ включено');
+            }
+        }
+
+    } catch (e) {
+        console.warn('⚠️ Не удалось проверить настройки:', e);
+    }
+}
+
 // ─── ПОКАЗ РЕЗУЛЬТАТА ──────────────────────────────────────
 
 function showResult() {
     $('result-group-id').textContent = state.selectedGroupId;
     $('result-token').textContent    = state.communityToken;
+
+    // Показываем статус Long Poll в подзаголовке
+    const sub = document.querySelector('#screen-success .success-sub');
+    if (sub) {
+        if (state.longPollEnabled) {
+            sub.textContent = 'Ваш бот привязан и готов к работе';
+        } else {
+            sub.textContent = 'Бот привязан. Long Poll нужно включить вручную.';
+        }
+    }
+
     showScreen('success');
 }
 
@@ -342,12 +487,14 @@ function retry() {
     state.communities     = [];
     state.selectedGroupId = null;
     state.communityToken  = null;
+    state.longPollEnabled = false;
+    state.messagesAllowed = false;
 
     showScreen('welcome');
     $('help-block').classList.add('hidden');
 }
 
-// ─── ПЕРЕВОД ОШИБОК VK НА РУССКИЙ ──────────────────────────
+// ─── ПЕРЕВОД ОШИБОК VK ─────────────────────────────────────
 
 function translateVkError(error) {
     const code = error.error_code;
@@ -368,7 +515,7 @@ function translateVkError(error) {
     return map[code] ? `${map[code]} (код ${code})` : `${msg} (код ${code})`;
 }
 
-// ─── ЗАПУСК ПРИ ЗАГРУЗКЕ ────────────────────────────────────
+// ─── ЗАПУСК ─────────────────────────────────────────────────
 
 window.addEventListener('load', () => {
     if (typeof vkBridge === 'undefined') {
