@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
 //  ArtWat Setup — VK Mini App
-//  Путь B: выбор сообщества + автоматическая настройка Long Poll
+//  Путь B: выбор сообщества + автонастройка Long Poll + проверка ботов
 // ═══════════════════════════════════════════════════════════
 
 // ─── КОНФИГУРАЦИЯ ───────────────────────────────────────────
@@ -16,7 +16,8 @@ const state = {
     selectedGroupId: null,
     communityToken:  null,
     longPollEnabled: false,
-    messagesAllowed: false
+    messagesAllowed: false,
+    botsEnabled:     false
 };
 
 let vkReadyPromise = null;
@@ -26,7 +27,7 @@ let vkReadyPromise = null;
 const $ = (id) => document.getElementById(id);
 
 function showScreen(name) {
-    ['welcome', 'loading', 'communities', 'success', 'error'].forEach(s => {
+    ['welcome', 'loading', 'communities', 'bots-off', 'success', 'error'].forEach(s => {
         const el = $('screen-' + s);
         if (el) el.classList.toggle('hidden', s !== name);
     });
@@ -207,40 +208,127 @@ function openCreateGroup() {
 
 // ─── ВЫБОР СООБЩЕСТВА ──────────────────────────────────────
 // 1. Получаем токен сообщества
-// 2. Включаем Long Poll API
-// 3. Запрашиваем разрешение на сообщения от сообщества
-// 4. Проверяем, что всё включилось
+// 2. Проверяем bots_capabilities (Возможности ботов)
+// 3. Если выключено — показываем экран-инструкцию
+// 4. Если включено — настраиваем Long Poll и разрешения
 
 async function selectCommunity(groupId) {
     state.selectedGroupId = groupId;
 
     showScreen('loading');
+    setProgress('Получение токена бота...', 4, 5);
 
     try {
-        // Шаг 4: получаем токен сообщества
-        setProgress('Получение токена бота...', 4, 5);
+        // Получаем токен сообщества
         state.communityToken = await getCommunityToken(groupId, state.userToken);
         console.log('✅ Токен сообщества получен');
 
-        // Шаг 5: настраиваем Long Poll API и разрешения
-        setProgress('Настройка сообщества...', 5, 5);
-        await configureCommunity(groupId, state.communityToken);
-        await requestMessagesPermission(groupId);
+        // Проверяем, включены ли возможности ботов
+        setProgress('Проверка настроек...', 5, 5);
+        state.botsEnabled = await checkBotsCapability(groupId, state.communityToken);
 
-        // Финальная проверка
-        await verifyLongPollSettings(groupId, state.communityToken);
+        if (!state.botsEnabled) {
+            console.log('⚠️ Возможности ботов выключены — показываю инструкцию');
+            const group = state.communities.find(c => c.id === groupId);
+            $('bots-off-group-name').textContent = group ? group.name : 'сообщество';
+            showScreen('bots-off');
+            return;
+        }
 
-        showResult();
+        // Всё включено — доводим настройку до конца
+        await finalizeSetup();
+
     } catch (err) {
         console.error('❌ Ошибка:', err);
         showError(err.message || JSON.stringify(err));
     }
 }
 
+// ─── ПРОВЕРКА "ВОЗМОЖНОСТЕЙ БОТОВ" ─────────────────────────
+// groups.getSettings возвращает bots_capabilities: 1 если включено, 0 если выключено
+
+async function checkBotsCapability(groupId, communityToken) {
+    console.log('📤 Проверяю bots_capabilities для', groupId);
+
+    try {
+        const result = await vkBridge.send('VKWebAppCallAPIMethod', {
+            method: 'groups.getSettings',
+            params: {
+                group_id:     groupId,
+                v:            '5.199',
+                access_token: communityToken
+            }
+        });
+
+        console.log('📥 Ответ groups.getSettings:', JSON.stringify(result));
+
+        if (result && result.response) {
+            const enabled = result.response.bots_capabilities === 1;
+            console.log('🔍 bots_capabilities:', enabled ? 'ВКЛЮЧЕНО' : 'ВЫКЛЮЧЕНО');
+            return enabled;
+        }
+
+        if (result && result.error) {
+            console.warn('⚠️ groups.getSettings вернул ошибку:', result.error);
+        }
+
+    } catch (e) {
+        console.warn('⚠️ Не удалось проверить bots_capabilities:', e);
+    }
+
+    // Если не смогли проверить — считаем, что включено (не блокируем пользователя)
+    return true;
+}
+
+// ─── КНОПКА "ОТКРЫТЬ НАСТРОЙКИ СООБЩЕСТВА" ─────────────────
+
+function openGroupSettings() {
+    if (!state.selectedGroupId) return;
+
+    const url = 'https://vk.com/club' + state.selectedGroupId + '?w=settings';
+    console.log('🔗 Открываю настройки:', url);
+
+    if (typeof vkBridge !== 'undefined') {
+        vkBridge.send('VKWebAppOpenLink', { url })
+            .catch(() => { window.open(url, '_blank'); });
+    } else {
+        window.open(url, '_blank');
+    }
+}
+
+// ─── КНОПКА "Я ВКЛЮЧИЛ, ПРОВЕРИТЬ СНОВА" ───────────────────
+
+async function checkBotsCapabilityAndProceed() {
+    showScreen('loading');
+    setProgress('Проверка настроек...', 5, 5);
+
+    state.botsEnabled = await checkBotsCapability(state.selectedGroupId, state.communityToken);
+
+    if (state.botsEnabled) {
+        await finalizeSetup();
+    } else {
+        console.log('⚠️ Возможности ботов всё ещё выключены');
+        showToast('Возможности ботов не включены');
+        showScreen('bots-off');
+    }
+}
+
+// ─── ФИНАЛИЗАЦИЯ НАСТРОЙКИ ─────────────────────────────────
+
+async function finalizeSetup() {
+    setProgress('Настройка Long Poll...', 5, 5);
+
+    await configureCommunity(state.selectedGroupId, state.communityToken);
+    await requestMessagesPermission(state.selectedGroupId);
+    await verifyLongPollSettings(state.selectedGroupId, state.communityToken);
+
+    showResult();
+}
+
 // ─── ШАГ 4: ТОКЕН СООБЩЕСТВА ───────────────────────────────
 
 async function getCommunityToken(groupId, userToken) {
-    // Способ 1: VKWebAppGetCommunityToken — родной метод VK Bridge
+    // Способ 1: VKWebAppGetCommunityToken
     try {
         console.log('📤 Запрашиваю VKWebAppGetCommunityToken...');
 
@@ -294,9 +382,7 @@ async function getCommunityToken(groupId, userToken) {
     );
 }
 
-// ─── ШАГ 5: АВТОНАСТРОЙКА СООБЩЕСТВА ───────────────────────
-// Включаем Long Poll API и типы событий через groups.setLongPollSettings.
-// Это полностью заменяет ручную настройку через десктопную версию VK.
+// ─── ШАГ 5: LONG POLL ──────────────────────────────────────
 
 async function configureCommunity(groupId, communityToken) {
     console.log('📤 Включаю Long Poll API для сообщества', groupId);
@@ -306,11 +392,11 @@ async function configureCommunity(groupId, communityToken) {
             method: 'groups.setLongPollSettings',
             params: {
                 group_id:      groupId,
-                enabled:       1,   // Включаем Long Poll API
-                message_new:   1,   // Новые входящие сообщения
-                message_reply: 1,   // Ответы на сообщения
-                message_allow: 1,   // Разрешение на отправку сообщений
-                message_edit:  1,   // Редактирование сообщений
+                enabled:       1,
+                message_new:   1,
+                message_reply: 1,
+                message_allow: 1,
+                message_edit:  1,
                 v:             '5.199',
                 access_token:  communityToken
             }
@@ -326,30 +412,16 @@ async function configureCommunity(groupId, communityToken) {
 
         if (result && result.error) {
             console.warn('⚠️ Ошибка setLongPollSettings:', result.error);
-
-            // Ошибка 15 (Access denied) — токен сообщества без права manage
-            if (result.error.error_code === 15) {
-                throw new Error(
-                    'Не удалось включить Long Poll API: у токена сообщества нет прав управления.\n\n' +
-                    'Откройте сообщество вручную: Управление → Работа с API → Long Poll API → Включить.'
-                );
-            }
-
-            throw new Error(translateVkError(result.error));
         }
 
     } catch (e) {
-        if (e.message && e.message.indexOf('Long Poll') !== -1) throw e;
         console.warn('⚠️ VK Bridge выбросил ошибку при setLongPollSettings:', e);
-        // Не прерываем — возможно, права уже настроены
     }
 
     return false;
 }
 
-// ─── РАЗРЕШЕНИЕ НА СООБЩЕНИЯ ОТ СООБЩЕСТВА ────────────────
-// Показывает пользователю нативное окно VK с запросом разрешения
-// на получение сообщений от имени сообщества.
+// ─── РАЗРЕШЕНИЕ НА СООБЩЕНИЯ ───────────────────────────────
 
 async function requestMessagesPermission(groupId) {
     console.log('📤 Запрашиваю разрешение на сообщения от сообщества...');
@@ -374,9 +446,7 @@ async function requestMessagesPermission(groupId) {
     return false;
 }
 
-// ─── ПРОВЕРКА НАСТРОЕК LONG POLL ───────────────────────────
-// Вызываем groups.getLongPollSettings, чтобы убедиться,
-// что всё действительно включилось.
+// ─── ПРОВЕРКА LONG POLL ────────────────────────────────────
 
 async function verifyLongPollSettings(groupId, communityToken) {
     console.log('📤 Проверяю настройки Long Poll...');
@@ -422,13 +492,14 @@ function showResult() {
     $('result-group-id').textContent = state.selectedGroupId;
     $('result-token').textContent    = state.communityToken;
 
-    // Показываем статус Long Poll в подзаголовке
-    const sub = document.querySelector('#screen-success .success-sub');
+    const sub = $('success-subtitle');
     if (sub) {
-        if (state.longPollEnabled) {
+        if (state.longPollEnabled && state.botsEnabled) {
             sub.textContent = 'Ваш бот привязан и готов к работе';
-        } else {
+        } else if (state.botsEnabled) {
             sub.textContent = 'Бот привязан. Long Poll нужно включить вручную.';
+        } else {
+            sub.textContent = 'Бот привязан, но требуются дополнительные настройки.';
         }
     }
 
@@ -489,6 +560,7 @@ function retry() {
     state.communityToken  = null;
     state.longPollEnabled = false;
     state.messagesAllowed = false;
+    state.botsEnabled     = false;
 
     showScreen('welcome');
     $('help-block').classList.add('hidden');
