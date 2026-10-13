@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
 //  ArtWat Setup — VK Mini App
-//  Путь B + чеклист настройки сообщества
+//  Путь B + чеклист + прямая ссылка на настройки бота
 // ═══════════════════════════════════════════════════════════
 
 // ─── КОНФИГУРАЦИЯ ───────────────────────────────────────────
@@ -205,9 +205,6 @@ function openCreateGroup() {
 }
 
 // ─── ВЫБОР СООБЩЕСТВА ──────────────────────────────────────
-// 1. Получаем токен сообщества
-// 2. Показываем чеклист (пользователь подтверждает, что включил ботов)
-// 3. finalizeSetup() настраивает Long Poll и разрешения
 
 async function selectCommunity(groupId) {
     state.selectedGroupId = groupId;
@@ -258,11 +255,15 @@ function toggleChecklist() {
     }
 }
 
+// ─── ОТКРЫТИЕ НАСТРОЕК БОТА ────────────────────────────────
+// Прямая ссылка на раздел «Настройки для бота» в сообществе.
+// Пользователь попадает сразу туда, где включается «Возможности ботов».
+
 function openGroupSettings() {
     if (!state.selectedGroupId) return;
 
-    const url = 'https://vk.com/club' + state.selectedGroupId + '?w=settings';
-    console.log('🔗 Открываю настройки:', url);
+    const url = 'https://vk.ru/club' + state.selectedGroupId + '/settings/bots';
+    console.log('🔗 Открываю настройки бота:', url);
 
     if (typeof vkBridge !== 'undefined') {
         vkBridge.send('VKWebAppOpenLink', { url })
@@ -435,7 +436,6 @@ async function verifyLongPollSettings(groupId, communityToken) {
         if (result && result.response) {
             const r = result.response;
 
-            // is_enabled — верхний уровень
             if (r.is_enabled) {
                 console.log('✅ Long Poll включён');
                 state.longPollEnabled = true;
@@ -444,7 +444,6 @@ async function verifyLongPollSettings(groupId, communityToken) {
                 state.longPollEnabled = false;
             }
 
-            // События — вложены в r.events
             const ev = r.events || {};
             if (ev.message_new)   console.log('✅ message_new включено');
             else                  console.warn('⚠️ message_new НЕ включено');
