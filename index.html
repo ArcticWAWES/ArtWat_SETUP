@@ -172,7 +172,7 @@
         font-weight: bold;
         font-family: Arial, sans-serif;
         cursor: pointer;
-        transition: transform 0.1s, background 0.15s;
+        transition: transform 0.1s, background 0.15s, opacity 0.15s;
         margin-bottom: 10px;
         letter-spacing: 0.2px;
     }
@@ -181,6 +181,12 @@
 
     .btn-primary { background: var(--purple); color: var(--white); }
     .btn-primary:active { background: var(--purple-dark); }
+
+    .btn-primary:disabled {
+        background: #cdb5d3;
+        cursor: not-allowed;
+        opacity: 0.7;
+    }
 
     .btn-secondary {
         background: #f0e8f2;
@@ -311,7 +317,78 @@
         line-height: 1.5;
     }
 
-    /* ─── Экран "включите бота" ─── */
+    /* ─── Чеклист ─── */
+    .checklist-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px;
+        background: #f7f8fa;
+        border-radius: 10px;
+        border: 1px solid #e8eaed;
+        margin-bottom: 12px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .checklist-item:active {
+        background: #ede4f1;
+    }
+
+    .checklist-item.checked {
+        background: var(--purple-light);
+        border-color: #d9b8e0;
+    }
+
+    .checklist-checkbox {
+        width: 24px;
+        height: 24px;
+        border: 2px solid #c5c8cc;
+        border-radius: 6px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+        margin-top: 1px;
+    }
+
+    .checklist-item.checked .checklist-checkbox {
+        background: var(--purple);
+        border-color: var(--purple);
+    }
+
+    .checklist-checkbox::after {
+        content: '✓';
+        color: white;
+        font-weight: bold;
+        font-size: 16px;
+        display: none;
+    }
+
+    .checklist-item.checked .checklist-checkbox::after {
+        display: block;
+    }
+
+    .checklist-text {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .checklist-label {
+        font-size: 14px;
+        font-weight: bold;
+        color: #1a1a1a;
+        line-height: 1.4;
+        margin-bottom: 4px;
+    }
+
+    .checklist-hint {
+        font-size: 12px;
+        color: #888;
+        line-height: 1.4;
+    }
+
     .instruction-block {
         margin: 16px 0;
         padding: 16px;
@@ -415,31 +492,47 @@
             </div>
         </div>
 
-        <!-- ═══ ЭКРАН 4: ВКЛЮЧИТЕ БОТА ═══ -->
-        <div id="screen-bots-off" class="hidden">
+        <!-- ═══ ЭКРАН 4: ЧЕКЛИСТ ═══ -->
+        <div id="screen-checklist" class="hidden">
             <div class="card">
-                <div class="error-title">НУЖНО ВКЛЮЧИТЬ БОТА</div>
+                <div class="success-title">ПРОВЕРЬТЕ НАСТРОЙКИ</div>
                 <div class="success-sub">
-                    В сообществе «<span id="bots-off-group-name">—</span>»<br>
-                    выключены возможности ботов
+                    В сообществе «<span id="checklist-group-name">—</span>»
+                </div>
+
+                <p style="text-align: center; font-size: 14px; color: #555; margin: 12px 0 16px;">
+                    Нужно включить одну настройку, чтобы кнопки бота работали.
+                </p>
+
+                <div class="checklist-item" id="checklist-bots" onclick="toggleChecklist()">
+                    <div class="checklist-checkbox"></div>
+                    <div class="checklist-text">
+                        <div class="checklist-label">Возможности ботов включены</div>
+                        <div class="checklist-hint">
+                            Управление → Сообщения → Настройки для бота
+                        </div>
+                    </div>
                 </div>
 
                 <div class="instruction-block">
                     <p class="instr-title">Как включить:</p>
                     <ol>
-                        <li>Нажмите «Открыть настройки сообщества»</li>
+                        <li>Нажмите «Открыть настройки сообщества» ниже</li>
                         <li>Перейдите в «Управление» → «Сообщения»</li>
+                        <li>Найдите «Настройки для бота»</li>
                         <li>Включите «Возможности ботов»</li>
-                        <li>Вернитесь сюда и нажмите «Проверить снова»</li>
+                        <li>Вернитесь сюда и отметьте галочку</li>
                     </ol>
                 </div>
 
-                <button class="btn-primary" onclick="openGroupSettings()">
+                <button class="btn-secondary" onclick="openGroupSettings()">
                     ОТКРЫТЬ НАСТРОЙКИ СООБЩЕСТВА
                 </button>
-                <button class="btn-secondary" onclick="checkBotsCapabilityAndProceed()">
-                    Я ВКЛЮЧИЛ, ПРОВЕРИТЬ СНОВА
+
+                <button class="btn-primary" id="btn-continue" disabled onclick="finalizeSetup()">
+                    ПРОДОЛЖИТЬ
                 </button>
+
                 <button class="btn-secondary" onclick="retry()" style="margin-top: 6px;">
                     НАЗАД К ВЫБОРУ СООБЩЕСТВА
                 </button>
