@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
 //  ArtWat Setup — VK Mini App
-//  Путь B + чеклист + прямая ссылка на настройки бота
+//  Путь B + чеклист со ссылкой на настройки бота
 // ═══════════════════════════════════════════════════════════
 
 // ─── КОНФИГУРАЦИЯ ───────────────────────────────────────────
@@ -17,7 +17,8 @@ const state = {
     communityToken:  null,
     longPollEnabled: false,
     messagesAllowed: false,
-    checklistDone:   false
+    checklistDone:   false,
+    settingsUrl:     ''
 };
 
 let vkReadyPromise = null;
@@ -228,7 +229,14 @@ async function selectCommunity(groupId) {
 
 function showChecklist() {
     const group = state.communities.find(c => c.id === state.selectedGroupId);
-    $('checklist-group-name').textContent = group ? group.name : 'сообщество';
+    const groupName = group ? group.name : 'сообщество';
+
+    $('checklist-group-name').textContent = groupName;
+
+    // Формируем ссылку и показываем её в поле
+    const url = 'https://vk.ru/club' + state.selectedGroupId + '/settings/bots';
+    $('settings-url').textContent = url;
+    state.settingsUrl = url;
 
     // Сброс состояния
     state.checklistDone = false;
@@ -255,21 +263,17 @@ function toggleChecklist() {
     }
 }
 
-// ─── ОТКРЫТИЕ НАСТРОЕК БОТА ────────────────────────────────
-// Прямая ссылка на раздел «Настройки для бота» в сообществе.
-// Пользователь попадает сразу туда, где включается «Возможности ботов».
+// ─── КОПИРОВАНИЕ ССЫЛКИ ────────────────────────────────────
 
-function openGroupSettings() {
-    if (!state.selectedGroupId) return;
+function copySettingsUrl() {
+    if (!state.settingsUrl) return;
 
-    const url = 'https://vk.ru/club' + state.selectedGroupId + '/settings/bots';
-    console.log('🔗 Открываю настройки бота:', url);
-
-    if (typeof vkBridge !== 'undefined') {
-        vkBridge.send('VKWebAppOpenLink', { url })
-            .catch(() => { window.open(url, '_blank'); });
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(state.settingsUrl)
+            .then(() => showToast('Ссылка скопирована'))
+            .catch(() => fallbackCopy(state.settingsUrl));
     } else {
-        window.open(url, '_blank');
+        fallbackCopy(state.settingsUrl);
     }
 }
 
@@ -527,6 +531,7 @@ function retry() {
     state.longPollEnabled = false;
     state.messagesAllowed = false;
     state.checklistDone   = false;
+    state.settingsUrl     = '';
 
     showScreen('welcome');
     $('help-block').classList.add('hidden');
