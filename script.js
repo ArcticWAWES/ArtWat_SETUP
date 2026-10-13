@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
 //  ArtWat Setup — VK Mini App
-//  Путь B + чеклист со ссылкой на настройки бота
+//  Путь B + чеклист + отдельные кнопки копирования
 // ═══════════════════════════════════════════════════════════
 
 // ─── КОНФИГУРАЦИЯ ───────────────────────────────────────────
@@ -233,12 +233,10 @@ function showChecklist() {
 
     $('checklist-group-name').textContent = groupName;
 
-    // Формируем ссылку и показываем её в поле
     const url = 'https://vk.ru/club' + state.selectedGroupId + '/settings/bots';
     $('settings-url').textContent = url;
     state.settingsUrl = url;
 
-    // Сброс состояния
     state.checklistDone = false;
     const item = $('checklist-bots');
     if (item) item.classList.remove('checked');
@@ -277,7 +275,7 @@ function copySettingsUrl() {
     }
 }
 
-// ─── ФИНАЛИЗАЦИЯ НАСТРОЙКИ ─────────────────────────────────
+// ─── ФИНАЛИЗАЦИЯ ───────────────────────────────────────────
 
 async function finalizeSetup() {
     if (!state.checklistDone) {
@@ -478,6 +476,33 @@ function showResult() {
 
 // ─── КОПИРОВАНИЕ ────────────────────────────────────────────
 
+function copyField(field) {
+    let value = '';
+    let label = '';
+
+    if (field === 'group') {
+        value = String(state.selectedGroupId);
+        label = 'Group ID';
+    } else if (field === 'token') {
+        value = state.communityToken;
+        label = 'Token';
+    }
+
+    if (!value) return;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(value)
+            .then(() => showToast(label + ' скопирован'))
+            .catch(() => {
+                fallbackCopy(value);
+                showToast(label + ' скопирован');
+            });
+    } else {
+        fallbackCopy(value);
+        showToast(label + ' скопирован');
+    }
+}
+
 function copyAll() {
     const text = `Group ID: ${state.selectedGroupId}\nToken: ${state.communityToken}`;
 
@@ -499,9 +524,8 @@ function fallbackCopy(text) {
     ta.select();
     try {
         document.execCommand('copy');
-        showToast('Скопировано');
     } catch (e) {
-        showToast('Не удалось скопировать');
+        // silent
     }
     document.body.removeChild(ta);
 }
