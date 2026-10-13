@@ -495,7 +495,7 @@
         <!-- ═══ ЭКРАН 4: ЧЕКЛИСТ ═══ -->
         <div id="screen-checklist" class="hidden">
             <div class="card">
-                <div class="success-title">ПРОВЕРЬТЕ НАСТРОЙКИ</div>
+                <div class="success-title">ВКЛЮЧИТЕ БОТА</div>
                 <div class="success-sub">
                     В сообществе «<span id="checklist-group-name">—</span>»
                 </div>
@@ -504,28 +504,34 @@
                     Нужно включить одну настройку, чтобы кнопки бота работали.
                 </p>
 
-                <div class="checklist-item" id="checklist-bots" onclick="toggleChecklist()">
-                    <div class="checklist-checkbox"></div>
-                    <div class="checklist-text">
-                        <div class="checklist-label">Возможности ботов включены</div>
-                        <div class="checklist-hint">
-                            Управление → Сообщения → Настройки для бота
-                        </div>
-                    </div>
-                </div>
-
                 <div class="instruction-block">
                     <p class="instr-title">Как включить:</p>
                     <ol>
-                        <li>Нажмите «Открыть настройки бота» ниже</li>
+                        <li>Скопируйте ссылку ниже</li>
+                        <li>Откройте её <b>в браузере</b> (Safari, Chrome и т.д.)</li>
                         <li>Включите переключатель <b>«Возможности ботов»</b></li>
                         <li>Вернитесь сюда и отметьте галочку</li>
                     </ol>
                 </div>
 
-                <button class="btn-secondary" onclick="openGroupSettings()">
-                    ОТКРЫТЬ НАСТРОЙКИ БОТА
+                <div class="field-block">
+                    <div class="field-label">Ссылка на настройки бота</div>
+                    <div class="field-value" id="settings-url">—</div>
+                </div>
+
+                <button class="btn-secondary" onclick="copySettingsUrl()">
+                    СКОПИРОВАТЬ ССЫЛКУ
                 </button>
+
+                <div class="checklist-item" id="checklist-bots" onclick="toggleChecklist()" style="margin-top: 16px;">
+                    <div class="checklist-checkbox"></div>
+                    <div class="checklist-text">
+                        <div class="checklist-label">Возможности ботов включены</div>
+                        <div class="checklist-hint">
+                            Отметьте, когда включите настройку в браузере
+                        </div>
+                    </div>
+                </div>
 
                 <button class="btn-primary" id="btn-continue" disabled onclick="finalizeSetup()">
                     ПРОДОЛЖИТЬ
