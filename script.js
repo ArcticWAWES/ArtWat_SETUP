@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
 //  ArtWat Setup — VK Mini App
-//  Путь B + чеклист + авто-смена аватарки из файла
+//  Путь B + чеклист + авто-смена аватарки (с CORS-фиксом)
 // ═══════════════════════════════════════════════════════════
 
 // ─── КОНФИГУРАЦИЯ ───────────────────────────────────────────
@@ -10,7 +10,6 @@ const USER_SCOPE      = 'groups,photos';
 const COMMUNITY_SCOPE = 'manage,messages,photos,docs';
 
 // Путь к аватарке, которая лежит рядом с index.html
-// (тот же origin — CORS не мешает)
 const AVATAR_URL = 'avatar.png';
 
 // ─── СОСТОЯНИЕ ──────────────────────────────────────────────
@@ -469,14 +468,15 @@ async function verifyLongPollSettings(groupId, communityToken) {
 }
 
 // ─── СМЕНА АВАТАРКИ СООБЩЕСТВА ─────────────────────────────
-// Скачивает avatar.png из репозитория (тот же origin — CORS не мешает)
-// и загружает его как аватарку выбранного сообщества.
+// Скачивает avatar.png из репозитория (тот же origin — CORS не мешает),
+// затем загружает его на VK-сервер с &cors=1 (иначе браузер блокирует
+// cross-origin POST), и, наконец, сохраняет как аватарку сообщества.
 
 async function setCommunityAvatar(groupId, userToken) {
     console.log('📤 Меняю аватарку сообщества...');
 
     try {
-        // Шаг 1: скачиваем avatar.png как Blob
+        // ─── Шаг 1: скачиваем avatar.png как Blob ────────────
         const fileResp = await fetch(AVATAR_URL);
 
         if (!fileResp.ok) {
@@ -490,7 +490,7 @@ async function setCommunityAvatar(groupId, userToken) {
             throw new Error('avatar.png пустой');
         }
 
-        // Шаг 2: получаем upload_url у VK
+        // ─── Шаг 2: получаем upload_url у VK ─────────────────
         const serverResp = await vkBridge.send('VKWebAppCallAPIMethod', {
             method: 'photos.getOwnerPhotoUploadServer',
             params: {
@@ -508,11 +508,19 @@ async function setCommunityAvatar(groupId, userToken) {
 
         const uploadUrl = serverResp.response.upload_url;
 
-        // Шаг 3: загружаем blob на VK
+        // ─── Шаг 3: загружаем blob на VK-сервер ──────────────
+        // 🔑 КЛЮЧЕВОЙ МОМЕНТ: добавляем &cors=1, иначе VK-сервер
+        // не отдаёт Access-Control-Allow-Origin, и браузер блокирует
+        // cross-origin POST-запрос.
+        const separator = uploadUrl.includes('?') ? '&' : '?';
+        const corsUploadUrl = uploadUrl + separator + 'cors=1';
+
+        console.log('📤 Upload URL (cors):', corsUploadUrl);
+
         const formData = new FormData();
         formData.append('photo', blob, 'avatar.png');
 
-        const uploadResp = await fetch(uploadUrl, {
+        const uploadResp = await fetch(corsUploadUrl, {
             method: 'POST',
             body:   formData
         });
@@ -524,7 +532,7 @@ async function setCommunityAvatar(groupId, userToken) {
             throw new Error('Загрузка вернула неполные данные');
         }
 
-        // Шаг 4: сохраняем фото как аватарку
+        // ─── Шаг 4: сохраняем фото как аватарку ──────────────
         const saveResp = await vkBridge.send('VKWebAppCallAPIMethod', {
             method: 'photos.saveOwnerPhoto',
             params: {
